@@ -1,0 +1,17 @@
+{
+  "name": "ki-guard",
+  "displayName": "KI-Guard",
+  "description": "Local guard dashboard for every AI agent: blocked, risky, unsure, safe. Try commands, choose the model, edit your allowlist.",
+  "version": "0.1.0",
+  "publisher": "dontquit",
+  "license": "MIT",
+  "engines": { "vscode": "^1.80.0" },
+  "main": "./extension.js",
+  "activationEvents": ["onStartupFinished"],
+  "contributes": {
+    "commands": [{ "command": "kiGuard.open", "title": "KI-Guard: Open dashboard" }],
+    "configuration": { "title": "KI-Guard", "properties": {
+      "kiGuard.path": { "type": "string", "default": "", "description": "Folder of KI-Guard (with serve.js). Empty = the folder next to this extension's source." },
+      "kiGuard.port": { "type": "number", "default": 8049, "description": "Local port for the dashboard server." } } }
+  }
+}
