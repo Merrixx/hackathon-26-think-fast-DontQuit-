@@ -79,6 +79,7 @@ The problem we locked in: should a person approve this shell command before an A
 | `cmdgate/engine.py` | The model backend: serves the models behind `POST /v1/systemone` (decision API) and `POST /v1/check` (verdict for the KI-Guard hook and dashboard, using each model's cut-offs from the harness) |
 | `ki-guard/` | The hook for coding agents and the dashboard. It holds no model: it calls the backend. See [ki-guard/README.md](ki-guard/README.md) |
 | `cmdgate/evaluate.py` | The eval harness: scores a model in process (`--scorer`) or any decision API engine (`--endpoint`) on a split, with ranges from resampling whole template families. Writes `results/<name>_<split>.json` |
+| [vscode-extension/](vscode-extension/README.md) | VS Code add-on: a second opinion on the commands an agent asks permission for, answered by the local app. Demo with fake data: [DEMO.md](vscode-extension/DEMO.md) |
 
 Downloading the datasets and training the encoder need extra libraries (Hugging Face Hub, PyArrow, PyTorch, Transformers), kept in the optional `ml` group:
 
