@@ -1,14 +1,10 @@
 {
   "name": "ki-guard",
   "version": "1.0.0",
-  "description": "Local guard hook for AI agents: allow, ask or block shell commands.",
+  "description": "Hook and dashboard for the command gate: asks the local model backend, then allows or asks.",
   "license": "MIT",
   "scripts": {
-    "get-data": "node get-data.js",
-    "reproduce": "node get-data.js && node model/reproduce.js && node model/compare.js && node model/stylecheck-ens.js",
     "start": "node serve.js",
-    "test": "node selftest.js",
-    "bench": "node model/bench-api.js",
-    "compare": "node model/compare.js && node model/stylecheck-ens.js"
+    "test": "node selftest.js"
   }
 }

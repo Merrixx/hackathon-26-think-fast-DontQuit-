@@ -74,10 +74,13 @@ The problem we locked in: should a person approve this shell command before an A
 | `cmdgate/dataset.py` | Loads CLI Command Risk as one row per distinct command, with its template family |
 | `cmdgate/build_suite.py` | Writes the splits as suites for the evaluation runner |
 | `cmdgate/rules.py`, `cmdgate/ngram.py` | The two baselines: a regex denylist, and character n-grams into a logistic regression |
-| `cmdgate/engine.py` | Serves any scorer behind `POST /v1/systemone` |
-| `cmdgate/evaluate.py` | Scores a scorer on a split, with ranges from resampling whole template families |
+| `cmdgate/encoder.py` | A fine-tuned text encoder (ModernBERT-base by default) with a five-level head, temperature-scaled on validation |
+| `cmdgate/scorers.py` | The models by name (`prior`, `rules`, `ngram`, `encoder`, any decision API endpoint such as Kev, and `vote`, the mean of its members). The harness and the engine both load them from here |
+| `cmdgate/engine.py` | The model backend: serves the models behind `POST /v1/systemone` (decision API) and `POST /v1/check` (verdict for the KI-Guard hook and dashboard, using each model's cut-offs from the harness) |
+| `ki-guard/` | The hook for coding agents and the dashboard. It holds no model: it calls the backend. See [ki-guard/README.md](ki-guard/README.md) |
+| `cmdgate/evaluate.py` | The eval harness: scores a model in process (`--scorer`) or any decision API engine (`--endpoint`) on a split, with ranges from resampling whole template families. Writes `results/<name>_<split>.json` |
 
-Downloading and reading the datasets needs two extra libraries, kept in the optional `ml` group:
+Downloading the datasets and training the encoder need extra libraries (Hugging Face Hub, PyArrow, PyTorch, Transformers), kept in the optional `ml` group:
 
 ```bash
 uv sync --extra ml
@@ -85,8 +88,25 @@ uv run --extra ml python -m cmdgate.fetch_data
 uv run --extra ml python -m cmdgate.build_suite
 uv run --extra ml python -m cmdgate.ngram
 uv run --extra ml python -m cmdgate.evaluate --scorer ngram --split validation
+uv run --extra ml python -m cmdgate.encoder                   # fine-tunes the encoder into models/encoder/ (about 30 min on Apple Silicon)
+uv run --extra ml python -m cmdgate.evaluate --scorer encoder --split validation
+uv run --extra ml python -m cmdgate.evaluate --scorer vote --members rules,ngram,encoder --split validation
 uv run --extra ml python -m cmdgate.engine --scorer ngram     # then score it with thinkfast.run_eval
+
+# any engine behind the decision API (Kev, the bridge) gets the same metrics:
+uv run --extra ml python -m cmdgate.evaluate --endpoint http://127.0.0.1:8011/v1/systemone --name kev --split validation
 ```
+
+### Hook and dashboard
+
+```bash
+uv run --extra ml python -m cmdgate.engine      # model backend on port 8009: every model found on disk, plus their vote
+cd ki-guard && npm start                        # dashboard on http://127.0.0.1:8049/
+```
+
+[KI-Guard](ki-guard/README.md) is the frontend: a hook for coding agents and a dashboard. It has no model of its own. For every command it calls the backend's `POST /v1/check`, and the backend answers with the models listed above. A model may allow a command on its own only inside the cut-off `cmdgate.evaluate` measured for it on validation (`results/<model>_validation.json`); a model without that file asks a person every time, and so does the `vote` unless it was evaluated with the same members the backend serves. The dashboard's "Eval harness" card shows every `results/<name>_<split>.json` side by side.
+
+To add Kev: serve it on another port, evaluate it with `--endpoint ... --name kev`, then start the backend with `--endpoint kev=http://127.0.0.1:8011/v1/systemone` and re-evaluate the vote with `--member-endpoint kev=...`.
 
 Tune on the validation split only. The test split is scored once, at the end. `cmdgate` is not yet connected to the `tagger` pipeline or `dataset.toml`.
 

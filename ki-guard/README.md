@@ -1,61 +1,74 @@
 # KI-Guard
 
-One file and no dependencies. It checks every action an AI wants to run **before** it runs.
+The hook and dashboard in front of the command gate. KI-Guard holds no model of its own: every shell command an AI wants to run goes to the Python backend in this repo (`cmdgate.engine`), and the verdict comes from the models the eval harness scores (regex rules, character n-grams, the fine-tuned encoder, and Kev once it is served).
 
-| Verdict | Meaning | Examples |
+| Verdict | Meaning | Where it comes from |
 |---|---|---|
-| 🛑 BLOCK | never runs | delete a whole drive, format a disk, fork bomb, delete backups, turn off antivirus, send keys/.env to the internet, write into `.ssh`/`system32` |
-| ⚠️ ASK | you have to confirm | `curl … \| bash`, `rm -rf folder`, `git push --force`, `reset --hard`, `DROP TABLE`, shutdown, `sudo`, `npm publish`, encoded commands, writing `.env` or the AI's own settings, API keys in code |
-| ✅ ALLOW | runs normally | everything else |
+| ✅ ALLOW | runs normally | The chosen model puts the risk at or below its allow cut-off |
+| ⚠️ ASK | you have to confirm | The risk is above the allow cut-off, the model has not been evaluated, or the backend is not running |
+| 🛑 BLOCK | never runs | Only for write tools: a file in `.ssh`, `system32` or a system folder |
 
-**Fail-open:** if the guard itself breaks, the action is allowed, so your AI never gets stuck.
-Every hit is logged in `~/.ki-guard/log.jsonl`.
+A model may allow a command on its own only inside the cut-off the eval harness measured for it on the validation split (`results/<model>_validation.json`). A model with no such result asks every time.
+
+KI-Guard still does three things itself: file-path and secret checks for write tools (`Write`, `Edit`, …), your allowlist, and the decision log in `~/.ki-guard/log.jsonl`.
+
+**Backend not running:** commands are not waved through; you are asked. Malformed hook input is allowed, so a broken hook call never bricks your agent.
+
+## Start
+
+In the repo root, start the model backend (port 8009):
+
+```bash
+uv run --extra ml python -m cmdgate.engine
+```
+
+It serves every model found on disk. Add Kev, or any engine that speaks the decision API, with `--endpoint kev=http://127.0.0.1:8011/v1/systemone`. Then, in this folder, start the dashboard (port 8049):
+
+```bash
+npm start
+```
+
+Open http://127.0.0.1:8049/. `KI_GUARD_BACKEND` points KI-Guard at another backend address, `PORT` moves the dashboard.
 
 ## Claude Code
+
 Add this to `~/.claude/settings.json` (all projects) or `.claude/settings.json` (one project):
+
 ```json
 {
   "hooks": {
     "PreToolUse": [
       { "matcher": "Bash|PowerShell|Write|Edit|MultiEdit|NotebookEdit",
-        "hooks": [{ "type": "command", "command": "node C:/path/to/KI-Guard/guard.js" }] }
+        "hooks": [{ "type": "command", "command": "node <path to this folder>/guard.js" }] }
     ]
   }
 }
 ```
 
 ## Any other AI or script
-```
-node guard.js check "<command>"
-```
-Exit code `0` means allow, `1` means ask, `2` means block. Use it in front of any agent's tool runner.
-
-## Test
-`node test.js` runs 40 cases: dangerous commands must be caught and normal work must pass.
-The test cases are stored as base64 so antivirus does not flag the file.
-
-## Any AI, not only Claude
 
 | AI / tool | How to hook it |
 |---|---|
-| Claude Code | `PreToolUse` hook (snippet above). |
 | Any agent with a pre-command hook (JSON on stdin) | `node guard.js --agent <name>`. Accepts `{tool_name, tool_input}` or `{command}`. |
 | Any script / wrapper | `node guard.js check "<command>" --agent <name>` → exit 0 allow, 1 ask, 2 block. |
-| Anything over HTTP | `npm start`, then `POST 127.0.0.1:8009/api/check {"command": "..."}`. |
+| Anything over HTTP | `POST 127.0.0.1:8009/v1/check {"command": "..."}` on the backend. |
 
-Every decision lands in `~/.ki-guard/log.jsonl` with the agent name.
+Every decision lands in `~/.ki-guard/log.jsonl` with the agent name and the model that decided.
 
 ## Dashboard + VS Code
 
-- Browser: `npm start` → http://127.0.0.1:8009/
+- Browser: `npm start` → http://127.0.0.1:8049/
 - VS Code: copy `vscode-extension/` to `~/.vscode/extensions/dontquit.ki-guard-0.1.0/`, reload the window. Click the shield in the status bar or run **KI-Guard: Open dashboard**.
 
 What you can see and do:
 
 - Blocked / likely risky / unsure / safe / allowed-by-you counts, per day and per AI.
-- **Try a command:** the verdict, each model's risk, the vote, root needed, and whether it can be undone.
-- **Decision mode:** Auto (weighted vote of 3), or one model alone. Saved in `~/.ki-guard/settings.json`.
-- **Models compared:** calibration curve against the ideal line, quality bars and downsides.
-- **Response time** 3 ways (library, HTTP, hook).
-- **Team:** each model's say in the vote and who is right when they disagree.
+- **Try a command:** the verdict, every backend model's risk with its cut-offs, which model decided, root needed, and whether it can be undone. The last two are fixed patterns in `traits.js`, not models.
+- **Decision mode:** Auto (the backend's default, the vote when more than one model is served) or one model alone. Saved in `~/.ki-guard/settings.json`.
+- **Models in the backend:** which models are served, and whether each has cut-offs from the eval harness.
+- **Eval harness:** every model scored by the repo's Python harness on the same CLI Command Risk rows: accuracy, share automated at 5 % errors, severe commands caught at 1 % false alarms, AUC, Brier and calibration error, with 95 % ranges on hover. It reads `../results/<name>_<split>.json`, written by `python -m cmdgate.evaluate` in the repo root (set `KI_GUARD_RESULTS` to read another folder). Nothing is shown until that command has run.
 - **Allowlist:** click "Allow" on any decision, or type a regex. Saved in `~/.ki-guard/allow.json`.
+
+## Test
+
+`npm test` runs the hook against a stand-in backend: the backend's verdict is passed through, an unreachable backend asks, and the file-path checks still block. It tests the wiring, not a model. Model quality is measured by `python -m cmdgate.evaluate` in the repo root.
