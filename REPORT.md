@@ -74,7 +74,9 @@ Validation split only, 3,541 commands in 128 template families. Ranges resample 
 |---|---|---|---|---|---|
 | Always the training level shares | 0.587 | 0.497 | 0.079 | 0.0% | 0.000 |
 | Rules (regex denylist) | 0.773 | 0.368 | 0.105 | 0.0% | 0.000 |
-| Character n-grams + logistic regression | 0.906 [0.835, 0.952] | 0.155 | 0.025 | 77.4% [40.2%, 100%] | 0.764 [0.595, 0.954] |
+| Character n-grams + logistic regression | 0.906 [0.835, 0.952] | 0.155 | 0.025 | 77.4% [40.2%, 100.0%] | 0.764 [0.595, 0.954] |
+| Fine-tuned encoder (ModernBERT-base, five-level head, temperature-scaled) | 0.913 [0.860, 0.952] | 0.135 | 0.016 | 89.1% [36.8%, 100.0%] | 0.790 [0.383, 0.930] |
+| Vote: mean of rules, n-grams and encoder | 0.918 [0.858, 0.961] | 0.159 | 0.122 | 89.8% [50.8%, 100.0%] | 0.893 [0.701, 0.973] |
 
 ```bash
 uv run --extra ml python -m cmdgate.fetch_data
@@ -82,7 +84,12 @@ uv run --extra ml python -m cmdgate.ngram
 uv run --extra ml python -m cmdgate.evaluate --scorer prior --split validation
 uv run --extra ml python -m cmdgate.evaluate --scorer rules --split validation
 uv run --extra ml python -m cmdgate.evaluate --scorer ngram --split validation
+uv run --extra ml python -m cmdgate.encoder
+uv run --extra ml python -m cmdgate.evaluate --scorer encoder --split validation
+uv run --extra ml python -m cmdgate.evaluate --scorer vote --members rules,ngram,encoder --split validation
 ```
+
+The encoder was trained once (3 epochs, seed 0, Apple M2); its epoch and temperature were chosen on this same validation split, and so was the n-gram model's regularisation, so these validation numbers are optimistic for both. The ranges of the three learned models overlap: validation does not separate them.
 
 ## Recommendation
 
