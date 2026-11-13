@@ -80,10 +80,6 @@ html{background:#fff}body{background:radial-gradient(900px 600px at 15% 0%,#eef0
 
   <div class="card"><div class="top" style="margin-bottom:12px"><h2 style="margin:0">Decision mode</h2><div id="modes"></div></div><div class="tiles" id="tiles"></div></div>
 
-  <div class="card"><h2>Team · how the 3 models work together</h2><div class="row" style="grid-template-columns:1fr 1fr">
-    <div><svg id="weights" viewBox="0 0 420 170" width="100%"></svg></div>
-    <div><svg id="agree" viewBox="0 0 420 170" width="100%"></svg></div></div></div>
-
   <div class="row">
     <div class="card"><h2>Share</h2><svg id="ring" viewBox="0 0 220 220" width="100%"></svg></div>
     <div class="card"><h2>Per day</h2><svg id="days" viewBox="0 0 640 220" width="100%"></svg></div>
@@ -91,18 +87,14 @@ html{background:#fff}body{background:radial-gradient(900px 600px at 15% 0%,#eef0
 
   <div class="row">
     <div class="card"><h2>Per AI</h2><svg id="agents" viewBox="0 0 240 200" width="100%"></svg></div>
-    <div class="card"><h2>Model on unseen attacks (holdout)</h2><svg id="proof" viewBox="0 0 640 200" width="100%"></svg></div>
+    <div class="card"><h2>Models in the backend</h2><div id="backend"></div></div>
   </div>
 
-  <div class="card"><h2>Models compared · holdout, unseen attacks</h2>
-    <div id="pills" style="margin-bottom:10px"></div>
-    <div class="row" style="grid-template-columns:300px 1fr">
-      <div><svg id="calib" viewBox="0 0 300 300" width="100%"></svg><div class="sub" style="font-size:11px">Dashed = how it should be (said 30 % → 30 % really risky). Above = too careful, below = too confident.</div></div>
-      <div><svg id="mbars" viewBox="0 0 620 262" width="100%"></svg><div id="cons" style="margin-top:8px"></div></div>
-    </div>
+  <div class="card"><h2>Eval harness · CLI Command Risk <span class="sub" id="hsplit"></span></h2>
+    <div id="hpills" style="margin-bottom:10px"></div>
+    <div id="harness"></div>
+    <div class="sub" id="hnote" style="font-size:11px;margin-top:8px"></div>
   </div>
-
-  <div class="card"><h2>Response time · 3 ways to run it (log scale)</h2><svg id="speeds" viewBox="0 0 900 200" width="100%"></svg></div>
 
   <div class="card"><h2>Recent decisions <span class="sub" id="filt"></span></h2><div class="list" id="recent"></div></div>
 
@@ -133,114 +125,93 @@ function render(d) {
   const pct = k => d.total ? (100 * d.buckets[k] / d.total).toFixed(1) + ' %' : '–';
   $('tiles').innerHTML = B.map(([k, n, c]) => `<div class="tile ${filter === k ? 'on' : ''}" data-k="${k}" data-tip="<b>${n}</b><br>${d.buckets[k]} of ${d.total} · ${pct(k)}<br><span class=sub>click to filter the list</span>"><span class="dot" style="background:${c}"></span><span class="sub">${n}</span><b>${d.buckets[k]}</b></div>`).join('');
   document.querySelectorAll('.tile').forEach(t => t.onclick = () => { filter = filter === t.dataset.k ? null : t.dataset.k; render(D); });
-  ring(d); days(d); agents(d); proof(d); recent(d); allow(d); models(d); speeds(d); team(d);
+  if (d.models) { MODELS = d.models; mode = d.mode || 'auto'; modes(); }
+  ring(d); days(d); agents(d); recent(d); allow(d); backendCard(d); harness(d);
 }
 
 const api = (u, b) => fetch(u, b ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) } : undefined).then(r => r.json());
-const MODES = [['auto', 'Auto (vote)'], ['chars', 'Model B'], ['rules', 'Model C'], ['words', 'Model A']];
-const MNAME = { words: 'Model A · words', chars: 'Model B · characters', rules: 'Model C · words + rules' };
-let mode = 'auto';
-function modes() { $('modes').innerHTML = MODES.map(([k, n]) => `<button class="btn s" data-m="${k}" style="margin-left:6px;${mode === k ? 'background:rgba(0,0,0,.24)' : ''}" data-tip="Decide with ${n}">${n}</button>`).join('');
+// Models come from the Python backend (GET /v1/models). "auto" = the backend's default model.
+let mode = 'auto', MODELS = { data: [], default: null };
+const info = k => MODELS.data.find(x => x.name === k) || null;
+const mlabel = k => k === 'auto' ? `Auto · ${MODELS.default || 'backend default'}` : k;
+function modes() { const ks = ['auto', ...MODELS.data.map(x => x.name)];
+  $('modes').innerHTML = ks.map(k => `<button class="btn s" data-m="${esc(k)}" style="margin-left:6px;${mode === k ? 'background:rgba(0,0,0,.24)' : ''}" data-tip="Decide with ${esc(mlabel(k))}">${esc(mlabel(k))}</button>`).join('');
   document.querySelectorAll('[data-m]').forEach(b => b.onclick = () => api('/api/settings', { mode: b.dataset.m }).then(() => { mode = b.dataset.m; modes(); tryIt(); })); }
-api('/api/settings').then(s => { mode = s.mode; modes(); }).catch(() => {});
 
 const VERB = { allow: ['Allowed', 'var(--b3)'], ask: ['Ask a person', 'var(--b1)'], block: ['Blocked', 'var(--b0)'] };
 function tryIt() {
   const c = $('try').value.trim(); if (!c) return;
   api('/api/check', { command: c }).then(r => {
-    const m = r.model, w = m.weights || {}, ids = Object.keys(m.models || {});
-    const bar = (n, p, wt) => `<div style="display:grid;grid-template-columns:190px 1fr 64px 52px;gap:10px;align-items:center;margin:5px 0">
-      <span class="sub">${n}</span><span style="height:10px;border-radius:5px;background:rgba(0,0,0,.07);position:relative;overflow:hidden" data-tip="<b>${n}</b><br>risk ${(p * 100).toFixed(2)} %${wt ? '<br>say in the vote: ' + wt + ' of ' + Object.values(w).reduce((a, b) => a + b, 0) : ''}">
-      <span style="position:absolute;inset:0 auto 0 0;width:${Math.max(1, p * 100)}%;background:var(--ink);border-radius:5px"></span>
-      <span style="position:absolute;top:-3px;bottom:-3px;left:${m.tAllow * 100}%;width:1px;background:rgba(0,0,0,.5)" data-tip="ask from ${(m.tAllow * 100).toFixed(1)} %"></span>
-      <span style="position:absolute;top:-3px;bottom:-3px;left:${m.tBlock * 100}%;width:2px;background:var(--ink)" data-tip="block from ${(m.tBlock * 100).toFixed(1)} %"></span></span>
-      <span>${(p * 100).toFixed(1)} %</span><span class="sub">${wt ? '×' + wt : ''}</span></div>`;
+    const ids = Object.keys(r.models || {});
+    const bar = (id, used) => { const p = r.models[id].p, pol = info(id), ok = pol && pol.evaluated;
+      const marks = ok && pol.confidence < 1 ? `<span style="position:absolute;top:-3px;bottom:-3px;left:${pol.allow_at_or_below * 100}%;width:1px;background:rgba(0,0,0,.5)"></span><span style="position:absolute;top:-3px;bottom:-3px;left:${pol.risky_at_or_above * 100}%;width:2px;background:var(--ink)"></span>` : '';
+      const note = !pol ? '' : !ok ? 'not evaluated' : pol.confidence >= 1 ? 'no cut-off' : `allow ≤ ${(pol.allow_at_or_below * 100).toFixed(1)} %`;
+      const tipText = `<b>${esc(id)}</b><br>risk ${(p * 100).toFixed(2)} %<br>${r.models[id].ms.toFixed(2)} ms` + (ok && pol.confidence < 1 ? `<br>allows at or below ${(pol.allow_at_or_below * 100).toFixed(1)} %<br>risky at or above ${(pol.risky_at_or_above * 100).toFixed(1)} %<br><span class=sub>cut-offs from the eval harness, validation split</span>` : pol ? `<br><span class=sub>${esc(ok ? 'No cut-off keeps it within the error budget, so it always asks' : pol.why)}</span>` : '');
+      return `<div style="display:grid;grid-template-columns:150px 1fr 64px 110px;gap:10px;align-items:center;margin:5px 0" data-tip="${esc(tipText)}">
+      <span class="${used ? '' : 'sub'}" style="${used ? 'font-weight:600' : ''}">${esc(id)}${used ? ' · used' : ''}</span><span style="height:10px;border-radius:5px;background:rgba(0,0,0,.07);position:relative;overflow:hidden">
+      <span style="position:absolute;inset:0 auto 0 0;width:${Math.max(1, p * 100)}%;background:${used ? 'var(--ink)' : 'var(--b2)'};border-radius:5px"></span>${marks}</span>
+      <span>${(p * 100).toFixed(1)} %</span><span class="sub" style="font-size:11px">${note}</span></div>`; };
     const v = VERB[r.level];
     const ICO = { allow: '<path d="M5 12.5l4.5 4.5L19 7.5"/>', ask: '<path d="M9.2 9a3 3 0 1 1 3.8 2.9c-.6.2-1 .8-1 1.4V14"/><circle cx="12" cy="18" r=".6" fill="var(--ink)"/>', block: '<path d="M6 6l12 12M18 6 6 18"/>' };
     const WORD = { allow: 'Safe', ask: 'Ask first', block: 'Stopped' };
-    const why = r.allowlisted ? 'You allowed this one yourself.' : r.rules.hits.length ? r.rules.hits[0].why + '.' :
-      r.level === 'allow' ? 'Nothing dangerous found. The AI may run it.' : r.level === 'block' ? 'Looks like an attack. It will not run.' : 'Not sure. KI-Guard asks you before it runs.';
-    const what = r.level === 'block' ? ' It will not run.' : r.level === 'ask' && r.rules.hits.length ? ' KI-Guard asks you first.' : '';
+    const why = r.allowlisted ? 'You allowed this one yourself.' : r.offline ? 'The model backend is not running, so KI-Guard asks you first.' :
+      r.policy && !r.policy.evaluated ? 'This model has not been evaluated yet, so KI-Guard asks you first.' :
+      r.level === 'allow' ? 'Nothing risky found. The AI may run it.' : r.bucket === 'likely' ? 'Looks risky. KI-Guard asks you before it runs.' : 'Not sure. KI-Guard asks you before it runs.';
     $('answer').hidden = false;
     $('answer').innerHTML = `<div class="ico"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--ink)" stroke-width="2" stroke-linecap="round">${ICO[r.level]}</svg></div>
-      <div><div class="word">${WORD[r.level]}</div><div class="say">${esc(why)}${what}</div></div>`;
+      <div><div class="word">${WORD[r.level]}</div><div class="say">${esc(why)}</div></div>`;
     $('tryout').innerHTML = `<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
       <span class="tag" style="font-size:14px;padding:6px 14px;background:rgba(0,0,0,.14)"><span class="dot" style="background:${v[1]}"></span>${v[0]}</span>
       <span class="chip" style="padding-right:12px">root: ${r.traits.needs_root ? 'yes' : 'no'}</span><span class="chip" style="padding-right:12px">undo: ${r.traits.reversible ? 'possible' : 'no'}</span>
-      <span class="chip" style="padding-right:12px">rules: ${r.rules.level}${r.rules.hits.length ? ' · ' + esc(r.rules.hits.map(h => h.id).join(', ')) : ''}</span>
-      ${r.allowlisted ? '<span class="chip" style="padding-right:12px">on your allowlist</span>' : ''}<span class="sub">${r.ms.toFixed(3)} ms</span></div>
-      ${ids.map(id => bar(MNAME[id], m.models[id], w[id])).join('')}
-      ${bar('<b style="color:var(--ink)">' + (m.mode === 'auto' ? 'Auto · weighted vote' : 'Used: ' + MNAME[m.mode]) + '</b>', m.p, 0)}`;
+      ${r.rules && r.rules.length ? `<span class="chip" style="padding-right:12px">rules matched: ${esc(r.rules.join(', '))}</span>` : ''}
+      ${r.allowlisted ? '<span class="chip" style="padding-right:12px">on your allowlist</span>' : ''}<span class="sub">${r.ms.toFixed(1)} ms</span></div>
+      <div class="sub" style="margin-bottom:6px">${esc(r.reason || '')}</div>
+      ${ids.map(id => bar(id, id === r.model)).join('')}`;
   });
+}
+
+// Which models the backend serves, and whether the eval harness has measured cut-offs for each.
+function backendCard(d) {
+  const m = d.models || { data: [] };
+  if (m.offline) { $('backend').innerHTML = `<div class="empty">Model backend not reachable at ${esc(d.backend)}.<br>Start it in the repo root: <code>uv run --extra ml python -m cmdgate.engine</code><br>Until then every command is sent to you.</div>`; return; }
+  const pc = v => v == null ? '–' : (v * 100).toFixed(1) + ' %';
+  $('backend').innerHTML = `<div class="list" style="max-height:none">` + m.data.map(x => `<div class="item" style="grid-template-columns:90px 1fr auto" data-tip="${esc(x.evaluated ? `<b>${esc(x.name)}</b><br>accuracy ${pc(x.accuracy)}<br>decides alone on ${pc(x.automation_rate)} of commands at ${pc(x.error_budget)} errors<br><span class=sub>eval harness, ${esc(x.split)} split</span>` : `<b>${esc(x.name)}</b><br>${esc(x.why)}`)}">
+    <span class="tag">${esc(x.name)}${x.name === m.default ? ' ★' : ''}</span>
+    <span class="sub" style="font-size:12px">${x.members && x.members.length ? 'mean of ' + esc(x.members.join(', ')) + ' · ' : ''}${!x.evaluated ? 'not evaluated, asks every time' : x.confidence >= 1 ? 'evaluated, no safe cut-off, asks every time' : `allows ≤ ${pc(x.allow_at_or_below)} · risky ≥ ${pc(x.risky_at_or_above)}`}</span>
+    <span style="font-size:12px">${x.evaluated ? pc(x.automation_rate) + ' automated' : ''}</span></div>`).join('') + `</div><div class="sub" style="font-size:11px;margin-top:8px">★ = backend default. Cut-offs come from the eval harness on the validation split.</div>`;
 }
 $('go').onclick = tryIt; $('try').onkeydown = e => { if (e.key === 'Enter') tryIt(); };
 
-function team(d) {
-  const t = d.compare && d.compare.team; if (!t) return;
-  const ids = Object.keys(t.weights).sort((a, b) => t.weights[b] - t.weights[a]), tot = ids.reduce((a, b) => a + t.weights[b], 0);
-  const lat = id => { const e = d.compare.engines.find(x => x.id === id); return e ? e.latency_ms.avg : 0; };
-  let s = `<text x="0" y="12" style="fill:var(--sub);font-size:11px">Say in the vote · best score = most, fastest = least</text>`;
-  ids.forEach((id, i) => { const y = 34 + i * 44, w = t.weights[id] / tot;
-    s += `<text x="0" y="${y}">${MNAME[id]}</text><rect x="0" y="${y + 7}" width="300" height="12" rx="6" fill="rgba(0,0,0,.06)"/>`;
-    s += `<rect x="0" y="${y + 7}" width="${300 * w}" height="12" rx="6" fill="${shade(2 + i > 4 ? 4 : 4 - i)}" data-tip="<b>${MNAME[id]}</b><br>say ${t.weights[id]} of ${tot} (${(w * 100).toFixed(0)} %)<br>eval Brier ${t.eval_brier[id].toFixed(4)}<br>speed ${lat(id).toFixed(4)} ms avg"/>`;
-    s += `<text x="310" y="${y + 18}">${(w * 100).toFixed(0)} %</text><text x="350" y="${y + 18}" style="fill:var(--sub);font-size:11px">${lat(id).toFixed(3)} ms</text>`; });
-  $('weights').innerHTML = s;
-  const n = t.all_agree + t.split, ag = t.all_agree / n, C = 2 * Math.PI * 56;
-  let a = `<circle cx="80" cy="85" r="56" fill="none" stroke="rgba(0,0,0,.08)" stroke-width="16"/>
-    <circle cx="80" cy="85" r="56" fill="none" stroke="var(--ink)" stroke-width="16" stroke-dasharray="${ag * C} ${C}" transform="rotate(-90 80 85)" data-tip="<b>All 3 agree</b><br>${t.all_agree} of ${n} holdout commands<br>right ${t.all_agree_correct} of ${t.all_agree}"/>
-    <text x="80" y="84" text-anchor="middle" style="font-size:20px;font-weight:600">${(ag * 100).toFixed(1)} %</text><text x="80" y="102" text-anchor="middle" style="fill:var(--sub);font-size:10px">all agree</text>`;
-  a += `<text x="170" y="40">When they disagree (${t.split}×)</text>`;
-  ids.forEach((id, i) => { const y = 62 + i * 26, v = t.split ? t.right_when_split[id] / t.split : 0;
-    a += `<text x="170" y="${y + 9}" style="fill:var(--sub);font-size:11px">${MNAME[id].split(' · ')[0]}</text><rect x="250" y="${y}" width="${Math.max(2, 120 * v)}" height="10" rx="5" fill="${shade(4 - i)}" data-tip="${MNAME[id]} right ${t.right_when_split[id]} of ${t.split}"/><text x="378" y="${y + 9}" style="font-size:11px">${t.right_when_split[id]}/${t.split}</text>`; });
-  const y = 62 + ids.length * 26; const v = t.split ? t.split_auto_correct / t.split : 0;
-  a += `<text x="170" y="${y + 9}" style="font-size:11px">Auto vote</text><rect x="250" y="${y}" width="${Math.max(2, 120 * v)}" height="10" rx="5" fill="var(--ink)" data-tip="Weighted vote right ${t.split_auto_correct} of ${t.split}"/><text x="378" y="${y + 9}" style="font-size:11px">${t.split_auto_correct}/${t.split}</text>`;
-  $('agree').innerHTML = a;
-}
 
-let sel = 'auto';
-const shade = i => ['#c7c7cc', '#a1a1a6', '#76767b', '#48484d', '#1d1d1f'][i];
-function models(d) {
-  const c = d.compare; if (!c) return;
-  $('pills').innerHTML = c.engines.map((e, i) => `<button class="btn s" data-e="${e.id}" style="${sel === e.id ? 'background:rgba(0,0,0,.22)' : ''};margin:0 6px 6px 0"><span class="dot" style="background:${shade(i)}"></span>${esc(e.name)}</button>`).join('');
-  document.querySelectorAll('[data-e]').forEach(b => b.onclick = () => { sel = b.dataset.e; models(D); });
-  // Calibration chart
-  const P = 34, W = 300 - P - 8, X = v => P + v * W, Y = v => 8 + (1 - v) * W;
-  let s = `<rect x="${P}" y="8" width="${W}" height="${W}" fill="rgba(0,0,0,.03)" rx="8"/>`;
-  for (const g of [0.25, 0.5, 0.75]) s += `<line x1="${X(g)}" y1="8" x2="${X(g)}" y2="${8 + W}" stroke="rgba(0,0,0,.06)"/><line x1="${P}" y1="${Y(g)}" x2="${P + W}" y2="${Y(g)}" stroke="rgba(0,0,0,.06)"/>`;
-  s += `<line x1="${X(0)}" y1="${Y(0)}" x2="${X(1)}" y2="${Y(1)}" stroke="var(--ink)" stroke-dasharray="5 5" opacity=".55" data-tip="<b>Ideal line</b><br>predicted risk = real share of risky commands"/>`;
-  c.engines.forEach((e, i) => { const on = e.id === sel; const pts = e.calibration_curve;
-    if (pts.length > 1) s += `<polyline points="${pts.map(q => X(q.predicted) + ',' + Y(q.actual)).join(' ')}" fill="none" stroke="${shade(i)}" stroke-width="${on ? 3 : 1.2}" opacity="${on ? 1 : .45}"/>`;
-    if (on) pts.forEach(q => s += `<circle cx="${X(q.predicted)}" cy="${Y(q.actual)}" r="${3 + Math.min(6, Math.log10(q.n + 1) * 2)}" fill="${shade(i)}" data-tip="<b>${esc(e.name)}</b><br>says ${(q.predicted * 100).toFixed(1)} % risky<br>really ${(q.actual * 100).toFixed(1)} % risky<br>${q.n} commands"/>`); });
-  s += `<text x="${P + W / 2}" y="298" text-anchor="middle" style="fill:var(--sub);font-size:10px">predicted risk →</text><text x="10" y="${8 + W / 2}" transform="rotate(-90 10 ${8 + W / 2})" text-anchor="middle" style="fill:var(--sub);font-size:10px">really risky →</text>`;
-  $('calib').innerHTML = s;
-  // Metric bars: all engines, selected bright
-  const mets = [['Attacks caught', 'recall', 1, 'higher is better'], ['Ranking (AUC)', 'auc', 1, 'higher is better'], ['Honest odds (1 − Brier×5)', 'brier', -1, 'higher is better'], ['False alarms', 'false_alarm_rate', 0, 'lower is better']];
-  let m = '';
-  mets.forEach(([n, k, dir, hint], j) => { const y = 14 + j * 64; m += `<text x="0" y="${y}">${n} <tspan style="fill:var(--sub);font-size:10px">${hint}</tspan></text>`;
-    c.engines.forEach((e, i) => { const raw = e[k]; const v = dir === -1 ? Math.max(0, 1 - raw * 5) : dir === 0 ? Math.min(1, raw * 20) : raw;
-      const on = e.id === sel, h = on ? 6 : 4, yy = y + 8 + i * 8;
-      m += `<rect x="0" y="${yy}" width="${Math.max(2, 520 * v)}" height="${h}" rx="3" fill="${shade(i)}" opacity="${on ? 1 : .5}" data-tip="<b>${esc(e.name)}</b><br>${n}: ${k === 'auc' ? raw.toFixed(4) : k === 'brier' ? 'Brier ' + raw.toFixed(4) : (raw * 100).toFixed(2) + ' %'}"/>`;
-      if (on) m += `<text x="${528 + 0}" y="${yy + 7}" style="font-size:11px">${k === 'auc' ? raw.toFixed(3) : k === 'brier' ? raw.toFixed(4) : (raw * 100).toFixed(1) + ' %'}</text>`; }); });
-  $('mbars').innerHTML = m;
-  const e = c.engines.find(x => x.id === sel);
-  $('cons').innerHTML = `<span class="sub" style="margin-right:6px">Downsides:</span>` + e.cons.map(x => `<span class="chip" style="padding-right:12px">${esc(x)}</span>`).join('') +
-    `<span class="chip" style="padding-right:12px" data-tip="avg ${e.latency_ms.avg.toFixed(4)} ms<br>p50 ${e.latency_ms.p50.toFixed(4)} · p95 ${e.latency_ms.p95.toFixed(4)}<br>best ${e.latency_ms.best.toFixed(4)} ms">⏱ ${e.latency_ms.avg.toFixed(4)} ms avg</span>`;
-}
-
-function speeds(d) {
-  const c = d.compare; if (!c || !c.speeds) return;
-  const lo = Math.log10(0.001), hi = Math.log10(200), X = v => 230 + (Math.log10(Math.max(0.001, v)) - lo) / (hi - lo) * 560;
-  let s = '';
-  for (const t of [0.001, 0.01, 0.1, 1, 10, 100]) s += `<line x1="${X(t)}" y1="6" x2="${X(t)}" y2="168" stroke="rgba(0,0,0,.07)"/><text x="${X(t)}" y="186" text-anchor="middle" style="fill:var(--sub);font-size:10px">${t} ms</text>`;
-  c.speeds.forEach((sp, i) => { const y = 22 + i * 52;
-    s += `<text x="0" y="${y + 4}">${esc(sp.name)}</text><text x="0" y="${y + 20}" style="fill:var(--sub);font-size:11px">avg ${sp.avg.toFixed(3)} ms · n ${sp.n}</text>`;
-    s += `<line x1="${X(sp.best)}" y1="${y + 6}" x2="${X(sp.p95)}" y2="${y + 6}" stroke="rgba(0,0,0,.35)" stroke-width="2"/>`;
-    s += `<rect x="${X(sp.best) - 1}" y="${y - 2}" width="2" height="16" fill="#9a9aa0" data-tip="best ${sp.best.toFixed(3)} ms"/>`;
-    s += `<rect x="${X(sp.p95) - 1}" y="${y - 2}" width="2" height="16" fill="#9a9aa0" data-tip="p95 ${sp.p95.toFixed(3)} ms"/>`;
-    s += `<circle cx="${X(sp.p50)}" cy="${y + 6}" r="6" fill="var(--ink)" data-tip="<b>${esc(sp.name)}</b><br>best ${sp.best.toFixed(3)} ms<br>median ${sp.p50.toFixed(3)} ms<br>average ${sp.avg.toFixed(3)} ms<br>p95 ${sp.p95.toFixed(3)} ms"/>`;
-    s += `<rect x="${X(sp.avg) - 4}" y="${y + 2}" width="8" height="8" transform="rotate(45 ${X(sp.avg)} ${y + 6})" fill="none" stroke="var(--ink)" data-tip="average ${sp.avg.toFixed(3)} ms"/>`; });
-  s += `<text x="230" y="198" style="fill:var(--sub);font-size:10px">● median  ◇ average  | best … p95 |</text>`;
-  $('speeds').innerHTML = s;
+// Scores from the Python eval harness (results/<scorer>_<split>.json), one row per model, same rows for every model.
+const HM = [['Accuracy', 'accuracy', 1, 'Share of commands on the right side of 50 %'],
+  ['Automated at 5 % errors', 'automation_rate_at_5pct', 1, 'Share of commands the model can decide alone with at most 5 % of those decisions wrong'],
+  ['Severe caught at 1 % false alarms', 'severe_recall_at_1pct_fpr', 1, 'Share of high and critical commands flagged when at most 1 % of safe ones are'],
+  ['Ranking (AUC)', 'auroc', 1, 'Chance that a risky command scores above a harmless one'],
+  ['Brier', 'brier', 0, 'Squared error of the probabilities, summed over yes and no. Lower is better'],
+  ['Calibration error', 'ece', 0, 'Gap between the stated confidence and how often it is right. Lower is better']];
+let hsplit = null;
+function harness(d) {
+  const all = d.harness || [];
+  if (!all.length) { $('hsplit').textContent = ''; $('hpills').innerHTML = ''; $('hnote').textContent = '';
+    $('harness').innerHTML = `<div class="empty">No harness results yet. Run <code>uv run --extra ml python -m cmdgate.evaluate --scorer ngram --split validation</code> in the repo root.</div>`; return; }
+  const splits = [...new Set(all.map(r => r.split))];
+  if (!splits.includes(hsplit)) hsplit = splits.includes('test') ? 'test' : splits[0];
+  $('hpills').innerHTML = splits.length < 2 ? '' : splits.map(x => `<button class="btn s" data-hs="${esc(x)}" style="margin:0 6px 6px 0;${x === hsplit ? 'background:rgba(0,0,0,.22)' : ''}">${esc(x)}</button>`).join('');
+  document.querySelectorAll('[data-hs]').forEach(b => b.onclick = () => { hsplit = b.dataset.hs; harness(D); });
+  const runs = all.filter(r => r.split === hsplit).sort((a, b) => (b.metrics.automation_rate_at_5pct ?? 0) - (a.metrics.automation_rate_at_5pct ?? 0));
+  const fmt = (k, v) => v == null || Number.isNaN(v) ? '–' : k === 'brier' || k === 'ece' || k === 'auroc' ? v.toFixed(3) : (v * 100).toFixed(1) + ' %';
+  const cell = (r, [n, k, up, hint]) => { const v = r.metrics[k], g = r.ranges[k];
+    const best = runs.every(o => o.metrics[k] == null || (up ? o.metrics[k] <= v : o.metrics[k] >= v));
+    const w = v == null ? 0 : Math.max(2, 100 * (up ? v : Math.max(0, 1 - v * (k === 'ece' ? 5 : 2))));
+    const tipText = `<b>${esc(r.scorer)}</b><br>${n}: ${fmt(k, v)}` + (g ? `<br>95 % range ${fmt(k, g[0])} to ${fmt(k, g[1])}<br><span class=sub>whole template families resampled</span>` : '') + `<br><span class=sub>${hint}</span>`;
+    return `<td data-tip="${esc(tipText)}"><div style="font-weight:${best ? 600 : 400}">${fmt(k, v)}</div><div style="height:4px;border-radius:2px;background:rgba(0,0,0,.06);margin-top:3px"><div style="height:4px;border-radius:2px;width:${w}%;background:${best ? 'var(--b0)' : 'var(--b3)'}"></div></div></td>`; };
+  $('harness').innerHTML = `<div style="overflow-x:auto"><table style="width:100%;border-collapse:separate;border-spacing:10px 8px;min-width:720px"><thead><tr><th style="text-align:left;font-weight:400" class="sub">Model</th>` +
+    HM.map(([n, , up]) => `<th style="text-align:left;font-weight:400;font-size:11px" class="sub">${n}${up ? '' : ' ↓'}</th>`).join('') + `</tr></thead><tbody>` +
+    runs.map(r => `<tr><td data-tip="${esc(`<b>${esc(r.scorer)}</b><br>${r.source === 'endpoint' ? 'scored over the decision API' : 'scored in the harness process'}` + (r.ms_per_command != null ? `<br>${r.ms_per_command.toFixed(2)} ms per command` : '') + (r.failed ? `<br>${r.failed} requests failed` : ''))}"><b>${esc(r.scorer)}</b>${r.failed ? ` <span class="tag">${r.failed} failed</span>` : ''}</td>` + HM.map(m => cell(r, m)).join('') + `</tr>`).join('') + `</tbody></table></div>`;
+  const first = runs[0], when = runs.map(r => r.scored_at).sort().pop();
+  $('hsplit').textContent = `· ${hsplit} split`;
+  $('hnote').textContent = (first.commands ? `${first.commands} commands in ${first.families} template families. ` : '') + `Written by cmdgate.evaluate, last run ${when.slice(0, 16).replace('T', ' ')} UTC. Bold = best in column. Hover a value for its 95 % range.`;
 }
 
 function ring(d) {
@@ -278,20 +249,6 @@ function agents(d) {
     s += `<text x="0" y="${y}" style="font-size:11px">${esc(a)} <tspan style="fill:var(--sub)">· ${tot}</tspan></text>`;
     for (const [b, n, c] of B) { const w = (v[b] / tot) * 240; if (!w) continue; s += `<rect x="${x}" y="${y + 5}" width="${w}" height="9" rx="4" fill="${c}" data-tip="<b>${esc(a)}</b><br>${n}: ${v[b]} of ${tot}"/>`; x += w; } });
   $('agents').innerHTML = s;
-}
-
-function proof(d) {
-  if (!d.model) { $('proof').innerHTML = `<text x="320" y="100" text-anchor="middle" style="fill:var(--sub)">Run npm run reproduce</text>`; return; }
-  const m = d.model.holdout, r = d.model.rules, q = d.model.queue;
-  const rows = [['Attacks caught (recall)', m.recall, r.recall], ['Ranking quality (AUC)', m.auc, r.auc], ['Decided automatically', q.automated_share, null]];
-  let s = '';
-  rows.forEach(([n, a, b], i) => { const y = 20 + i * 58;
-    s += `<text x="0" y="${y}">${n}</text>`;
-    s += `<rect x="0" y="${y + 8}" width="520" height="12" rx="6" fill="rgba(0,0,0,.06)"/><rect x="0" y="${y + 8}" width="${520 * a}" height="12" rx="6" fill="var(--b0)" data-tip="<b>KI-Guard model</b><br>${n}: ${(a * 100).toFixed(2)} %<br><span class=sub>holdout, n = ${m.n}, unseen attack scenarios</span>"/>`;
-    s += `<text x="530" y="${y + 19}">${(a * 100).toFixed(1)} %</text>`;
-    if (b != null) s += `<rect x="0" y="${y + 24}" width="${Math.max(2, 520 * b)}" height="6" rx="3" fill="var(--b3)" data-tip="<b>Regex rules only</b><br>${n}: ${(b * 100).toFixed(2)} %"/><text x="530" y="${y + 32}" style="fill:var(--sub);font-size:11px">rules ${(b * 100).toFixed(1)} %</text>`;
-  });
-  $('proof').innerHTML = s;
 }
 
 function recent(d) {
