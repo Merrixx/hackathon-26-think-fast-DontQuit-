@@ -7,3 +7,21 @@ data/*.csv
 results/
 *.gguf
 data/*.json
+
+# Dataset files: never committed. Put them where dataset.toml points (see data/README.md)
+data/raw/
+data/holdout/
+*holdout*.csv
+# Adaption exports and derived Kev training/eval files: rebuilt with `python -m tagger.seed`
+data/adaption/
+data/kev/
+
+# Fitted model artifacts and Kev checkpoints (frozen/policy.json is tracked)
+models/
+runs/
+*.joblib
+*.pkl
+*.safetensors
+
+# Local tool settings
+.claude/settings.local.json

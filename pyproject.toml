@@ -1,8 +1,11 @@
 [project]
 name = "thinkfast"
 version = "0.1.0"
-description = "Starter kit for the Think Fast track: local decision models for data work."
+description = "Think Fast starter kit plus a dataset-agnostic local yes/no tagging pipeline (Kev + Adaption)."
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "pandas>=3.1.1",
+    "scikit-learn>=1.9.1",
+]

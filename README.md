@@ -1,8 +1,73 @@
 # Think Fast: Local Decision Models
 
-Starter kit for the proximata track at **proximata Hackathon '26** (13–14 November 2026, Home of Innovation, Vienna).
+Our entry for the proximata track at **proximata Hackathon '26** (13–14 November 2026, Home of Innovation, Vienna), built on the track's starter kit. The brief and judging rules are in [CASE.md](CASE.md); our plan is in [PRD.md](PRD.md).
 
-Pick a real problem made of small judgment calls, build a decision model for it that runs on your own hardware, and prove that it works. The full brief, including how the jury scores you, is in [CASE.md](CASE.md).
+## Our project: local yes/no tagging with Kev and Adaption
+
+The tool is offline and answers one yes/no question per record. It tags the records it is confident about automatically and sends the rest to a review queue, keeping wrong automatic tags within **1%** per tag.
+
+- **Model:** our own fine-tune of [Kev](https://github.com/jaredpalmer/kev), an open decision model.
+- **Training data:** the dataset's real training split, improved and expanded with [Adaption](https://www.adaptionlabs.ai/) into growing synthetic training sets (50k → 100k → 200k rows).
+- **Baselines:** classic models (lookup, logistic regression, gradient-boosted trees).
+- **Evaluation:** always on real data only.
+
+**Status:** pipeline and tests are in place, but there is **no dataset yet** and therefore no results. A dataset is added by filling in [`dataset.toml`](dataset.toml); see [data/README.md](data/README.md).
+
+### Setup
+
+Needs [uv](https://docs.astral.sh/uv/). The `tagger` pipeline uses pandas and scikit-learn (pinned in `uv.lock`):
+
+```bash
+uv sync
+uv run python -m unittest discover -s tests -t .
+```
+
+Kev is a separate project with its own setup (Python 3.12+, an NVIDIA GPU for training). See its README and [PRD.md](PRD.md#models).
+
+### Workflow
+
+```bash
+# 1. dataset in: fill dataset.toml, put files in data/raw/, then
+uv run python -m tagger.download --verify
+uv run python -m tagger.compare                          # classic baselines on eval
+
+# 2. Adaption seed and the real eval sample Kev is scored on
+uv run python -m tagger.seed seed --rows 50000           # upload data/kev/seed_real_50k.csv to Adaption
+uv run python -m tagger.seed eval --rows 10000           # stays local
+uv run python -m tagger.seed jsonl --input data/adaption/<export>.csv --out data/kev/<name>.jsonl
+
+# 3. Kev: train on a GPU with kev.train, serve locally with kev.serve on port 8009, then
+uv run python -m tagger.compare --sample 10000 --endpoint http://127.0.0.1:8009/v1/systemone --label <name>
+
+# 4. freeze the shipped engine and cutoffs (classic by default; --endpoint for Kev)
+uv run python -m tagger.freeze
+
+# 5. review tool
+uv run python -m tagger.batch replay --batch demo --input data/raw/eval.csv
+uv run python -m tagger.batch queue  --batch demo
+uv run python -m tagger.batch review --batch demo --id <id> --tag yes --note "why"
+uv run python -m tagger.score --batch demo --key data/raw/eval.csv
+
+# 6. final score, once, after freeze
+uv run python -m tagger.holdout
+```
+
+`uv run python -m tagger.serve` serves a frozen classic model on the decision API (port 8009). Kev serves the same API itself.
+
+| Path | What it is |
+|---|---|
+| [PRD.md](PRD.md) | Product requirements: data contract, the Adaption → Kev loop, policy, acceptance |
+| [dataset.toml](dataset.toml) | The dataset definition, the only file to edit for a new dataset |
+| [data/README.md](data/README.md) | How to add a dataset; where files go |
+| `tagger/` | The pipeline: `config`, `data`, `download`, `models`, `compare`, `policy`, `engine`, `freeze`, `batch`, `score`, `holdout`, `serve`, `seed` |
+| `frozen/policy.json` | The frozen design (created by `tagger.freeze`, tracked) |
+| `results/`, `models/`, `runs/` | Generated outputs, model artifacts and Kev checkpoints (gitignored) |
+
+---
+
+## Starter kit
+
+The rest of this README is the track's starter kit documentation. The starter problem, its generators and the runner are unchanged.
 
 You choose the problem. This kit is optional help: a starter problem with a test suite, a scorer and a baseline engine, for teams who'd rather spend the time building.
 
@@ -21,7 +86,7 @@ You choose the problem. This kit is optional help: a starter problem with a test
 | `thinkfast/messy.py` | Starter problem: generates a messy product catalogue to build your tool on, with an answer key |
 | `thinkfast/metrics.py` | The formulas the runner uses |
 
-Everything is plain Python 3.11+ with no dependencies. All data is synthetic: fictional brands and products, no people.
+The starter kit (`thinkfast/`) is plain Python 3.11+ with no dependencies. Its starter-problem data is synthetic: fictional brands and products, no people. Our `tagger/` pipeline adds pandas and scikit-learn.
 
 ## Pick a problem
 
@@ -87,7 +152,7 @@ The track jury scores every team out of 100 during its demo slot: a problem wort
 
 ## Status and known limits
 
-- The tests cover the metrics, the suite generator, the runner and the bridge's wire format against fake servers: `uv run python -m unittest discover -s tests -t .`
+- The tests cover the metrics, the suite generator, the runner and the bridge's wire format against fake servers, plus our `tagger` pipeline (config checks, cutoff policy, freeze → batch → review → score → holdout → API on a throwaway fixture): `uv run python -m unittest discover -s tests -t .`
 - The bridge has been run against Qwen3.5-0.8B (Q8_0) on llama.cpp's `llama-server` (build b12314): 200 dev requests, no errors. It needs a server that returns `top_logprobs` for chat completions; it reports an error if yours doesn't. **Turn thinking off for reasoning models** (`llama-server --reasoning off`): otherwise the reply starts with the thinking marker instead of an answer letter and every question becomes a uniform guess.
 - Dev-suite labels are generated by rules. The ticket family's urgency labels follow rules the question doesn't state, so even good engines score near chance on urgency. Leave it out of your numbers, or write the rules into the question.
 - Kev, SemIf, LocalJev and Goethe are independent open-source projects. Check their READMEs for hardware needs and setup. This kit is not affiliated with them or with any decision-model vendor.

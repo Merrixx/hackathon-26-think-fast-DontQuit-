@@ -2,7 +2,9 @@
 
 ## Project Overview
 
-This repository is the participant starter kit for "Think Fast: Local Decision Models", the proximata track at proximata Hackathon '26 (13–14 November 2026, Vienna). It holds the case brief (`CASE.md`), the decision API contract (`docs/decision-api.md`) and a dependency-free Python package (`thinkfast/`) with the dev-suite generator, the evaluation runner, a baseline bridge and a messy-dataset generator. Everything here is public and MIT-licensed: never commit hidden-suite data, its generator seeds or answer keys. Before making changes, read the README, project documentation, and nearby code to understand the intended workflow, architecture, and conventions.
+This repository is the participant starter kit for "Think Fast: Local Decision Models", the proximata track at proximata Hackathon '26 (13–14 November 2026, Vienna). It holds the case brief (`CASE.md`), the decision API contract (`docs/decision-api.md`) and a dependency-free Python package (`thinkfast/`) with the dev-suite generator, the evaluation runner, a baseline bridge and a messy-dataset generator. Everything here is public and MIT-licensed: never commit hidden-suite data, its generator seeds or answer keys.
+
+On top of the kit, this repo holds our project (see `PRD.md`): a dataset-agnostic yes/no tagging pipeline (`tagger/`, configured by `dataset.toml`, data layout in `data/README.md`). Its training data is improved and expanded with Adaption (adaptionlabs.ai), and the model is a fine-tuned Kev, with classic models as baselines. Never commit dataset files, Adaption exports, Kev checkpoints or model artifacts. Synthetic rows go into training only; eval and holdout stay real, and the holdout is read only by `tagger.holdout` after `tagger.freeze`. Before making changes, read the README, project documentation, and nearby code to understand the intended workflow, architecture, and conventions.
 
 ## Working Principles
 

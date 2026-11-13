@@ -1,0 +1,46 @@
+# Dataset definition: the only file to edit when a new dataset is added.
+# Every `tagger` command reads it. Empty required fields stop the commands with
+# a message saying what to fill in. See data/README.md for the full checklist.
+
+[dataset]
+name = ""          # short slug, e.g. "loan-default"
+description = ""   # one line: what one row is and what is predicted
+source = ""        # where the real data comes from (URL)
+licence = ""       # licence of the source data, and of any Adaption-generated rows
+# The yes/no question the decision API and Kev answer for each row.
+question = ""
+
+[files]
+# Real data only. Train may later be extended with Adaption-generated rows (see PRD.md);
+# eval and holdout stay 100% real. Paths are relative to the repo root.
+train = "data/raw/train.csv"
+eval = "data/raw/eval.csv"
+holdout = "data/holdout/holdout.csv"   # read only by `tagger.holdout`, after freeze
+
+[files.sha256]     # optional: published checksums; leave "" to skip the check
+train = ""
+eval = ""
+holdout = ""
+
+[files.rows]       # optional: published data-row counts (header excluded); 0 skips the check
+train = 0
+eval = 0
+holdout = 0
+
+[download]         # optional: base URL the three files can be fetched from
+base_url = ""
+
+[columns]
+id = ""            # stable record ID (never a feature)
+target = ""        # label column
+positive = ["1", "1.0", "true", "yes"]   # label values that mean "yes"
+negative = ["0", "0.0", "false", "no"]   # label values that mean "no"
+numeric = []       # numeric input columns
+categorical = []   # categorical input columns (missing values become their own category)
+log1p = []         # numeric columns spanning orders of magnitude (amounts, counts)
+lookup = ""        # one input column for the lookup baseline
+stratify = ""      # optional column (e.g. year) to keep balanced when sampling seed files
+
+[policy]
+error_budget = 0.01   # max share of wrong automatic tags, per tag
+min_support = 500     # min eval rows a tag needs before it may be automated
