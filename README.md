@@ -63,6 +63,33 @@ uv run python -m tagger.holdout
 | `frozen/policy.json` | The frozen design (created by `tagger.freeze`, tracked) |
 | `results/`, `models/`, `runs/` | Generated outputs, model artifacts and Kev checkpoints (gitignored) |
 
+## Dataset and baselines: the command gate
+
+The problem we locked in: should a person approve this shell command before an AI coding agent runs it? `cmdgate/` holds the data pipeline, the question, two baselines and the evaluation for it. The scorecard and the numbers so far are in [REPORT.md](REPORT.md).
+
+| Path | What it is |
+|---|---|
+| `cmdgate/questions.py` | The yes/no question and the five-level risk scale, in the decision API's format |
+| `cmdgate/fetch_data.py` | Downloads eight datasets at pinned revisions into `data/raw/` (not committed), with each one's licence |
+| `cmdgate/dataset.py` | Loads CLI Command Risk as one row per distinct command, with its template family |
+| `cmdgate/build_suite.py` | Writes the splits as suites for the evaluation runner |
+| `cmdgate/rules.py`, `cmdgate/ngram.py` | The two baselines: a regex denylist, and character n-grams into a logistic regression |
+| `cmdgate/engine.py` | Serves any scorer behind `POST /v1/systemone` |
+| `cmdgate/evaluate.py` | Scores a scorer on a split, with ranges from resampling whole template families |
+
+Downloading and reading the datasets needs two extra libraries, kept in the optional `ml` group:
+
+```bash
+uv sync --extra ml
+uv run --extra ml python -m cmdgate.fetch_data
+uv run --extra ml python -m cmdgate.build_suite
+uv run --extra ml python -m cmdgate.ngram
+uv run --extra ml python -m cmdgate.evaluate --scorer ngram --split validation
+uv run --extra ml python -m cmdgate.engine --scorer ngram     # then score it with thinkfast.run_eval
+```
+
+Tune on the validation split only. The test split is scored once, at the end. `cmdgate` is not yet connected to the `tagger` pipeline or `dataset.toml`.
+
 ---
 
 ## Starter kit
