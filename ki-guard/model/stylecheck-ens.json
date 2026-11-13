@@ -1,0 +1,19 @@
+{
+  "scripts": 123,
+  "words": {
+    "auto_blocked": 0,
+    "to_person": 0
+  },
+  "chars": {
+    "auto_blocked": 0,
+    "to_person": 0
+  },
+  "rules": {
+    "auto_blocked": 0,
+    "to_person": 0
+  },
+  "auto": {
+    "auto_blocked": 0,
+    "to_person": 0
+  }
+}
