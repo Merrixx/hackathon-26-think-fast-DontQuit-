@@ -1,0 +1,27 @@
+// Reads ~/.ki-guard/log.jsonl + allow.json for the dashboard. Local files only.
+'use strict';
+const fs = require('fs'), path = require('path'), os = require('os');
+const DIR = path.join(os.homedir(), '.ki-guard');
+const ALLOW = path.join(DIR, 'allow.json');
+const old = e => e.bucket || (e.level === 'block' ? 'blocked' : e.level === 'allow' ? 'safe' : 'likely');
+function readAllow() { try { return JSON.parse(fs.readFileSync(ALLOW, 'utf8')).patterns || []; } catch { return []; } }
+function writeAllow(patterns) { fs.mkdirSync(DIR, { recursive: true }); fs.writeFileSync(ALLOW, JSON.stringify({ patterns }, null, 2)); }
+function stats() {
+  let lines = [];
+  try { lines = fs.readFileSync(path.join(DIR, 'log.jsonl'), 'utf8').split('\n').filter(Boolean); } catch {}
+  const ev = lines.map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean)
+    .map(e => ({ t: e.t, bucket: old(e), agent: e.agent || 'claude-code', tool: e.tool || '', text: e.text || (e.input && (e.input.command || e.input.file_path)) || '', p: e.p ?? null, hits: e.hits || [] }));
+  const buckets = { blocked: 0, likely: 0, unsure: 0, safe: 0, yours: 0 };
+  const agents = {}, days = {}, rules = {};
+  for (const e of ev) {
+    buckets[e.bucket]++;
+    (agents[e.agent] ||= { blocked: 0, likely: 0, unsure: 0, safe: 0, yours: 0 })[e.bucket]++;
+    const d = (e.t || '').slice(0, 10); (days[d] ||= { blocked: 0, likely: 0, unsure: 0, safe: 0, yours: 0 })[e.bucket]++;
+    for (const h of e.hits) rules[h] = (rules[h] || 0) + 1;
+  }
+  let model = null; try { model = JSON.parse(fs.readFileSync(path.join(__dirname, 'model/results.json'), 'utf8')); } catch {}
+  let compare = null; try { compare = JSON.parse(fs.readFileSync(path.join(__dirname, 'model/compare.json'), 'utf8')); } catch {}
+  return { compare, total: ev.length, buckets, agents, days, rules, recent: ev.slice(-60).reverse(), allow: readAllow(),
+    model: model && { holdout: model.holdout['KI-Guard model (shipped)'], rules: model.holdout['Rule guard (regex)'], queue: model.queue_holdout } };
+}
+module.exports = { stats, readAllow, writeAllow };

