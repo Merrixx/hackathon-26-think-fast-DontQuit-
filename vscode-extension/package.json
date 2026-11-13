@@ -1,0 +1,142 @@
+{
+  "name": "cmdgate-vscode",
+  "displayName": "Command Gate",
+  "description": "A second opinion on the shell commands an AI agent asks you to approve: dangerous, root access, risk level and safe/unsafe, from your locally running Command Gate app.",
+  "version": "0.1.0",
+  "publisher": "dontquit",
+  "license": "MIT",
+  "private": true,
+  "engines": {
+    "vscode": "^1.93.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./src/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "scripts": {
+    "test": "node --test test/"
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "cmdgate.checkCommand",
+        "title": "Check command…",
+        "category": "Command Gate"
+      },
+      {
+        "command": "cmdgate.checkSelection",
+        "title": "Check selection",
+        "category": "Command Gate"
+      },
+      {
+        "command": "cmdgate.showPanel",
+        "title": "Show second opinions",
+        "category": "Command Gate"
+      },
+      {
+        "command": "cmdgate.installClaudeHook",
+        "title": "Install Claude Code hook",
+        "category": "Command Gate"
+      },
+      {
+        "command": "cmdgate.removeClaudeHook",
+        "title": "Remove Claude Code hook",
+        "category": "Command Gate"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "cmdgate.checkSelection",
+          "when": "editorHasSelection",
+          "group": "navigation@90"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Command Gate",
+      "properties": {
+        "cmdgate.endpoint": {
+          "type": "string",
+          "default": "http://127.0.0.1:8009/v1/systemone",
+          "description": "Decision API endpoint of the locally running Command Gate app."
+        },
+        "cmdgate.model": {
+          "type": "string",
+          "default": "local",
+          "description": "Value sent as `model` in each request (use it to pick one of the app's models)."
+        },
+        "cmdgate.timeoutMs": {
+          "type": "number",
+          "default": 3000,
+          "minimum": 100,
+          "description": "How long to wait for the app before showing 'no answer'."
+        },
+        "cmdgate.threshold": {
+          "type": "number",
+          "default": 0.5,
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Probability at or above which a yes/no answer is shown as 'yes' (dangerous, root, unsafe)."
+        },
+        "cmdgate.questions": {
+          "type": "object",
+          "default": {
+            "dangerous": {
+              "type": "noul",
+              "instructions": "Could this shell command cause serious damage, data loss or a security problem if it runs as written?"
+            },
+            "requires_root": {
+              "type": "noul",
+              "instructions": "Does this shell command need root or administrator privileges to run?"
+            },
+            "risk_level": {
+              "type": "score",
+              "instructions": "How much damage could this shell command do if it runs as written?",
+              "criteria": [
+                "safe: read-only or routine, no plausible path to data loss, privilege change or disruption",
+                "low: a local change that is quick to undo",
+                "moderate: repairable without backups, with some effort",
+                "high: needs backups to recover, exposes secrets to others, runs unverified code, or takes the machine down",
+                "critical: destroys a disk, filesystem, system directory or home folder, or gives away root-level control"
+              ]
+            },
+            "unsafe": {
+              "type": "noul",
+              "instructions": "Should a person approve this shell command before an AI coding agent runs it?"
+            }
+          },
+          "description": "Questions sent with each command, in decision API format. Change IDs or wording to match what the app was trained on."
+        },
+        "cmdgate.fields": {
+          "type": "object",
+          "default": {
+            "dangerous": "dangerous",
+            "root": "requires_root",
+            "riskLevel": "risk_level",
+            "verdict": "unsafe"
+          },
+          "description": "Which question ID fills each field on screen."
+        },
+        "cmdgate.showCard": {
+          "type": "boolean",
+          "default": true,
+          "description": "Open the second-opinion card beside the editor (without taking focus) when a command is checked."
+        },
+        "cmdgate.notifyOnPrompt": {
+          "type": "string",
+          "enum": [
+            "always",
+            "flagged",
+            "off"
+          ],
+          "default": "off",
+          "description": "Also show VS Code's plain notification toast for permission prompts: always, flagged only, or off."
+        }
+      }
+    }
+  }
+}
