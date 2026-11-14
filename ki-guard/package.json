@@ -5,6 +5,11 @@
   "license": "MIT",
   "scripts": {
     "start": "node serve.js",
-    "test": "node selftest.js"
+    "test": "node selftest.js",
+    "build:css": "node styles/build.js"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.3.5",
+    "tailwindcss": "^4.3.5"
   }
 }

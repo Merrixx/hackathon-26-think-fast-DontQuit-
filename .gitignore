@@ -28,3 +28,4 @@ runs/
 
 # Download bookkeeping written by `python -m cmdgate.fetch_models`
 /.cache/
+node_modules/
