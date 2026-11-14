@@ -10,10 +10,11 @@ models, the encoder). The large encoders under `models/enc-*` and their
 ensemble take 2 to 3 GB of memory each, so they are loaded only when named.
 
 `POST /v1/systemone` is the decision API. The default model answers a yes/no
-question with the probability that the command is risky and, when it has risk
-levels, a five-level score question with the levels themselves; any other
-question gets a uniform answer, which the evaluation runner scores as an
-unconfident guess.
+question about approval with the probability that the command is risky. When
+it has risk levels it also answers the five-level score question with the
+levels and "is it dangerous" with P(high or critical). "Does it need root" gets
+no answer: no model here knows. Any other question gets a uniform answer, which
+the evaluation runner scores as an unconfident guess.
 
 `POST /v1/check {"command": "...", "model": "ngram"}` is what the KI-Guard hook
 and dashboard call. It returns the probability and verdict of the model asked,
@@ -40,7 +41,7 @@ from thinkfast.metrics import question_options, uniform
 from .encoder import MODEL_DIR as ENCODER_DIR
 from .ngram import MODEL_PATH as NGRAM_PATH
 from .policy import POLICY_PATH
-from .questions import LEVELS, command_from_state, risky_probability
+from .questions import command_from_state, dangerous_probability, question_kind, risky_probability
 from .rules import matched_rules
 from .scorers import (ENSEMBLES, MODELS_DIR, NGRAM_PLUS, VOTE, VoteScorer, in_process_names, load_scorers,
                       parse_endpoints, risky_scores)
@@ -69,15 +70,32 @@ def decide(scorer: Any, body: dict[str, Any]) -> dict[str, Any]:
         total = sum(levels) or 1.0
         levels = [p / total for p in levels]
     answers: dict[str, Any] = {}
+    return {"answers": answers_for(questions, risky_probability(levels) if levels else scores[0], levels)}
+
+
+def answers_for(questions: dict[str, Any], risky: float, levels: list[float] | None) -> dict[str, Any]:
+    """One answer per question the models can answer.
+
+    `risky` answers a yes/no question about approval, the levels answer the five-level score, and
+    P(high or critical) answers "is it dangerous". A question no model here can answer ("does it need
+    root") gets no entry, so a frontend shows it as not available instead of a number that means
+    something else; so do the level and "dangerous" questions when no model has risk levels. Any other
+    question gets a uniform answer, which the runner scores as an unconfident guess.
+    """
+    answers: dict[str, Any] = {}
     for qid, question in questions.items():
-        qtype = question.get("type")
-        if qtype == "noul":
-            answers[qid] = {"type": "noul", "noul": risky_probability(levels) if levels else scores[0]}
-        elif qtype == "score" and levels and len(question.get("criteria") or []) == len(LEVELS):
+        kind = question_kind(qid, question)
+        if kind == "risky":
+            answers[qid] = {"type": "noul", "noul": risky}
+        elif kind == "level" and levels:
             answers[qid] = {"type": "score", "probabilities": {str(i): p for i, p in enumerate(levels)}}
+        elif kind == "dangerous" and levels:
+            answers[qid] = {"type": "noul", "noul": dangerous_probability(levels)}
+        elif kind in ("root", "dangerous", "level"):
+            continue
         else:
             answers[qid] = {"type": question.get("type"), "probabilities": uniform(question_options(question))}
-    return {"answers": answers}
+    return answers
 
 
 def load_policy(name: str, members: list[str], results_dir: Path, frozen: Path | None = None) -> dict[str, Any]:

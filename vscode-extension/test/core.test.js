@@ -81,7 +81,7 @@ test("panel escapes the command and shows all four fields", () => {
   const entry = { command: "echo '<script>x</script>'", source: "Claude Code", description: "Print a tag",
     at: new Date(), ms: 3, result: core.parseAnswers(ANSWER), severity: "error" };
   const older = { ...entry, command: "ls -la", at: new Date(0) };
-  const html = renderPanel([entry, older], "http://127.0.0.1:8009/v1/systemone");
+  const html = renderPanel([entry, older], "http://127.0.0.1:8019/v1/systemone");
   assert.ok(!html.includes("<script>x"));
   for (const text of ["Look closely before you approve", "Risk level", "critical", "Dangerous", "Needs root access",
     "Claude Code wants to run", "Print a tag", "Earlier checks"]) assert.ok(html.includes(text), text);
@@ -89,7 +89,7 @@ test("panel escapes the command and shows all four fields", () => {
 
 test("panel explains an app that did not answer, and an empty history", () => {
   const html = renderPanel([{ command: "ls", source: "manual", at: new Date(), error: "connect ECONNREFUSED",
-    severity: "offline", endpoint: "http://127.0.0.1:8009/v1/systemone" }], "x");
+    severity: "offline", endpoint: "http://127.0.0.1:8019/v1/systemone" }], "x");
   assert.ok(html.includes("No second opinion") && html.includes("ECONNREFUSED"));
   assert.ok(renderPanel([], "x").includes("Waiting for a permission prompt"));
 });

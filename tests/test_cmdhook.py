@@ -7,12 +7,14 @@ import subprocess
 import tempfile
 import threading
 import unittest
+import urllib.request
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 
 from cmdhook import models as registry
 from cmdhook.config import APP_DIR, Config, ConfigError, load, parse_env
-from cmdhook.server import decide, make_hook_handler
+from cmdgate.questions import LEVEL_QUESTION, RISKY_QUESTION, question_kind
+from cmdhook.server import decide, make_hook_handler, mean_levels, systemone_answer
 from thinkfast.run_eval import post_json
 
 HOOK = APP_DIR / "hook.js"
@@ -179,11 +181,38 @@ class BackendTest(unittest.TestCase):
                          {"low": (0.02, 0.5, True), "high": (0.96, 0.5, False)})
         self.assertIn("privilege", answer["rules"])
 
-    def test_the_engine_endpoints_are_still_served(self):
-        base = self.serve(Config(), low=0.02)
-        self.assertEqual(post_json(f"{base}/v1/check", {"command": "ls"}, 5, None)["verdict"], "ask")  # not evaluated
+    def test_the_dashboard_gets_the_hooks_decision_and_every_model(self):
+        base = self.serve(Config(threshold=0.5), low=0.02, high=0.96)
+        check = post_json(f"{base}/v1/check", {"command": "ls"}, 5, None)
+        self.assertEqual((check["verdict"], check["bucket"]), ("ask", "likely"))  # all must pass, `high` does not
+        self.assertEqual({name: row["verdict"] for name, row in check["models"].items()}, {"low": "allow", "high": "ask"})
+        one = post_json(f"{base}/v1/check", {"command": "ls", "model": "low"}, 5, None)
+        self.assertEqual((one["verdict"], one["model"], one["p"]), ("allow", "low", 0.02))
+        self.assertEqual(one["policy"]["allow_at_or_below"], 0.5)
         with self.assertRaises(Exception):
             post_json(f"{base}/v1/hook", {"command": " "}, 5, None)
+
+    def test_a_denying_backend_reports_block_and_lists_its_models(self):
+        base = self.serve(Config(threshold=0.5, on_fail="deny", thresholds={"HIGH": 0.2}), low=0.02, high=0.96)
+        self.assertEqual(post_json(f"{base}/v1/check", {"command": "ls"}, 5, None)["verdict"], "block")
+        with urllib.request.urlopen(f"{base}/v1/models", timeout=5) as response:
+            listing = json.loads(response.read())
+        self.assertEqual({row["name"]: row["allow_at_or_below"] for row in listing["data"]}, {"low": 0.5, "high": 0.2})
+
+    def test_hook_decisions_are_logged_for_the_dashboard(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "log.jsonl"
+            handler = make_hook_handler({"high": FixedScorer(0.96)}, Config(threshold=0.5), Path(tmp), log_path=log)
+            server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+            threading.Thread(target=server.serve_forever, daemon=True).start()
+            self.addCleanup(server.server_close)
+            self.addCleanup(server.shutdown)
+            base = f"http://127.0.0.1:{server.server_address[1]}"
+            post_json(f"{base}/v1/hook", {"command": "rm -rf build"}, 5, None)
+            post_json(f"{base}/v1/check", {"command": "ls"}, 5, None)  # a dashboard try-out is not a decision
+            entries = [json.loads(line) for line in log.read_text().splitlines()]
+        self.assertEqual(len(entries), 1)
+        self.assertEqual((entries[0]["level"], entries[0]["bucket"], entries[0]["hits"]), ("ask", "likely", ["model:high"]))
 
     @unittest.skipUnless(shutil.which("node"), "node is not installed")
     def test_the_hook_passes_the_decision_to_claude_code(self):
@@ -230,6 +259,57 @@ class BackendTest(unittest.TestCase):
         for stdin in (edit, "not json"):
             done = self.hook(stdin=stdin)
             self.assertEqual((done.returncode, done.stdout), (0, ""))
+
+
+class LevelScorer:
+    """Says the same probability per risk level for every command."""
+
+    def __init__(self, levels: list[float]) -> None:
+        self.fixed = levels
+
+    def levels(self, command: str) -> list[float]:
+        return self.fixed
+
+
+PLUGIN_QUESTIONS = {
+    "dangerous": {"type": "noul", "instructions": "Could this shell command cause serious damage, data loss or a "
+                                                  "security problem if it runs as written?"},
+    "requires_root": {"type": "noul", "instructions": "Does this shell command need root or administrator "
+                                                      "privileges to run?"},
+    "risk_level": LEVEL_QUESTION,
+    "unsafe": {"type": "noul", "instructions": RISKY_QUESTION["instructions"]},
+}
+
+
+class PluginAnswerTest(unittest.TestCase):
+    def ask(self, scorers: dict, **settings) -> dict:
+        return systemone_answer(scorers, Config(models=tuple(scorers), **settings),
+                                {"state": {"command": "rm -rf build"}, "questions": PLUGIN_QUESTIONS})
+
+    def test_questions_are_told_apart_by_what_they_ask(self):
+        kinds = {qid: question_kind(qid, question) for qid, question in PLUGIN_QUESTIONS.items()}
+        self.assertEqual(kinds, {"dangerous": "dangerous", "requires_root": "root", "risk_level": "level",
+                                 "unsafe": "risky"})
+        self.assertEqual(question_kind("risky", RISKY_QUESTION), "risky")
+
+    def test_each_question_gets_its_own_number_and_root_gets_none(self):
+        body = self.ask({"levels": LevelScorer([0.1, 0.1, 0.2, 0.5, 0.1]), "flat": FixedScorer(0.2)})
+        answers = body["answers"]
+        self.assertAlmostEqual(answers["unsafe"]["noul"], (0.8 + 0.2) / 2)
+        self.assertAlmostEqual(answers["dangerous"]["noul"], 0.6)
+        self.assertAlmostEqual(answers["risk_level"]["probabilities"]["3"], 0.5)
+        self.assertNotIn("requires_root", answers)
+
+    def test_without_a_level_model_only_the_approval_question_is_answered(self):
+        answers = self.ask({"flat": FixedScorer(0.9)})["answers"]
+        self.assertEqual(list(answers), ["unsafe"])
+        self.assertIsNone(mean_levels({"flat": {"p": 0.9, "ms": 1.0, "failed": False}}))
+
+    def test_the_answer_carries_the_decision_and_every_model(self):
+        body = self.ask({"calm": FixedScorer(0.1), "wary": FixedScorer(0.9)}, threshold=0.5, combine="all")
+        self.assertEqual(body["decision"], "ask")
+        self.assertEqual({name: row["passed"] for name, row in body["models"].items()}, {"calm": True, "wary": False})
+        self.assertIn("wary", body["reason"])
 
 
 if __name__ == "__main__":

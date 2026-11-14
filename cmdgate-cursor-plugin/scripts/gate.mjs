@@ -15,7 +15,7 @@ function env(name, fallback) {
 
 function options() {
   return {
-    endpoint: env('CMDGATE_ENDPOINT', 'http://127.0.0.1:8009/v1/systemone'),
+    endpoint: env('CMDGATE_ENDPOINT', 'http://127.0.0.1:8019/v1/systemone'),
     model: env('CMDGATE_MODEL', 'local'),
     timeoutMs: Math.max(1, Number(env('CMDGATE_TIMEOUT_MS', '3000')) || 3000),
     threshold: Number(env('CMDGATE_THRESHOLD', '0.5')) || 0.5,

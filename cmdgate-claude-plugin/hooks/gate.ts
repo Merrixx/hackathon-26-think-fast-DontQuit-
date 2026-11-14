@@ -32,7 +32,10 @@ export const QUESTIONS = {
 
 export type YesNo = { p: number; yes: boolean } | null
 export type Risk = { index: number; level: string; p: number; probabilities: number[] } | null
-export type Opinion = { dangerous: YesNo; root: YesNo; risk: Risk; verdict: YesNo }
+// What one model of the backend said, and the backend's own decision, when it sends them.
+export type ModelRow = { name: string; p: number | null; threshold: number | null; passed: boolean; failed: boolean }
+export type Decision = { decision: string; reason: string } | null
+export type Opinion = { dangerous: YesNo; root: YesNo; risk: Risk; verdict: YesNo; models: ModelRow[]; decision: Decision }
 
 export function buildRequest(command: string, model: string) {
   return { model, state: { command }, questions: QUESTIONS }
@@ -61,14 +64,41 @@ function readLevel(answer: Answer): Risk {
   return { index, level: LEVELS[index] ?? 'unknown', p: probabilities[index] ?? 0, probabilities }
 }
 
+type ModelAnswer = { p?: unknown; threshold?: unknown; passed?: unknown; failed?: unknown } | null | undefined
+
+// Each model's own risk and whether it passed its threshold. Only the backend knows the thresholds.
+function readModels(body: unknown): ModelRow[] {
+  const models = (body as { models?: unknown } | null)?.models
+  if (!models || typeof models !== 'object') return []
+  return Object.entries(models as Record<string, ModelAnswer>).map(([name, m]) => {
+    const p = clamp01(m?.p)
+    const failed = m?.failed === true || p === null
+    return { name, p, threshold: clamp01(m?.threshold), passed: !failed && m?.passed === true, failed }
+  })
+}
+
+function readDecision(body: unknown): Decision {
+  const b = body as { decision?: unknown; reason?: unknown } | null
+  return typeof b?.decision === 'string' ? { decision: b.decision, reason: typeof b.reason === 'string' ? b.reason : '' } : null
+}
+
 // Missing or malformed answers become null and read as "n/a", never guessed.
+// When the backend sends its own decision, the verdict is that decision, not this plugin's threshold.
 export function parseAnswers(body: unknown, threshold: number): Opinion {
   const answers = ((body as { answers?: Record<string, Answer> } | null)?.answers ?? {}) as Record<string, Answer>
+  const decision = readDecision(body)
+  let verdict = readYesNo(answers['unsafe'], threshold)
+  if (decision) {
+    const mean = clamp01((body as { mean?: unknown }).mean)
+    verdict = { p: mean ?? verdict?.p ?? 0, yes: decision.decision === 'ask' || decision.decision === 'deny' }
+  }
   return {
     dangerous: readYesNo(answers['dangerous'], threshold),
     root: readYesNo(answers['requires_root'], threshold),
     risk: readLevel(answers['risk_level']),
-    verdict: readYesNo(answers['unsafe'], threshold),
+    verdict,
+    models: readModels(body),
+    decision,
   }
 }
 
@@ -79,7 +109,10 @@ const yesNo = (v: YesNo) => (v ? `${v.yes ? 'yes' : 'no'} ${pct(v.p)}` : 'n/a')
 export function noticeLine(o: Opinion): string {
   const verdict = !o.verdict ? 'no verdict' : o.verdict.yes ? 'UNSAFE' : 'safe'
   const risk = o.risk ? `${o.risk.level} ${pct(o.risk.p)}` : 'n/a'
-  return `Command Gate: ${verdict} · risk ${risk} · dangerous ${yesNo(o.dangerous)} · root ${yesNo(o.root)}`
+  const models = o.models.length
+    ? ` · models ${o.models.map(m => `${m.name} ${m.failed || m.p === null ? 'n/a' : pct(m.p)}${m.passed ? '' : '!'}`).join(', ')}`
+    : ''
+  return `Command Gate: ${verdict} · risk ${risk} · dangerous ${yesNo(o.dangerous)} · root ${yesNo(o.root)}${models}`
 }
 
 // Transcript logs are plain text, so use line breaks and coloured Unicode
@@ -108,7 +141,17 @@ export function transcriptBlock(o: Opinion): string {
       : row('Risk', '⚪', 'n/a'),
     yesNoRow('Dangerous', o.dangerous),
     yesNoRow('Root', o.root),
+    ...modelRows(o),
   ].join('\n')
+}
+
+// One row per model of the backend: its own risk and whether it passed its threshold.
+function modelRows(o: Opinion): string[] {
+  if (!o.models.length) return []
+  const head = o.decision ? `  Models     ${o.decision.decision.toUpperCase()}${o.decision.reason ? ` · ${o.decision.reason}` : ''}` : '  Models'
+  return [head, ...o.models.map(m => m.failed || m.p === null
+    ? row(m.name.slice(0, 10), '⚪', 'no answer')
+    : row(m.name.slice(0, 10), m.passed ? '🟢' : '🔴', m.passed ? 'pass' : 'FAIL', m.p))]
 }
 
 export function offlineLine(endpoint: string, reason: string): string {

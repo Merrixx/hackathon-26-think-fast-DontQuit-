@@ -47,6 +47,7 @@ class Config:
     kev_dir: str = "../kev"
     kev_port: int = 8011
     kev_start_seconds: float = 300.0
+    log: str = "~/.ki-guard/log.jsonl"
 
     @property
     def names(self) -> list[str]:
@@ -142,4 +143,5 @@ def load(path: Path = ENV_PATH, environ: Mapping[str, str] | None = None) -> Con
         kev_port=int(_number("KEV_PORT", raw["KEV_PORT"], int)) if "KEV_PORT" in raw else default.kev_port,
         kev_start_seconds=(_number("KEV_START_SECONDS", raw["KEV_START_SECONDS"], float)
                            if "KEV_START_SECONDS" in raw else default.kev_start_seconds),
+        log="" if raw.get("LOG", default.log).lower() in ("off", "none", "0") else raw.get("LOG", default.log),
     )

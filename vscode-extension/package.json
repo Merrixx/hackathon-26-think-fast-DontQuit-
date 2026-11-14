@@ -52,7 +52,7 @@
       "properties": {
         "cmdgate.endpoint": {
           "type": "string",
-          "default": "http://127.0.0.1:8009/v1/systemone",
+          "default": "http://127.0.0.1:8019/v1/systemone",
           "description": "Decision API endpoint of the locally running Command Gate app."
         },
         "cmdgate.model": {

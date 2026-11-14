@@ -45,7 +45,7 @@ the plain toast is off by default (`cmdgate.notifyOnPrompt`).
 - VS Code 1.93 or newer.
 - The Command Gate app running locally and serving the decision API
   (`POST /v1/systemone`, see [../docs/decision-api.md](../docs/decision-api.md)). The default endpoint is
-  `http://127.0.0.1:8009/v1/systemone`.
+  `http://127.0.0.1:8019/v1/systemone`.
 - For Claude Code prompts: the [Command Gate Claude Code plugin](../cmdgate-claude-plugin/README.md).
 - For Cursor Agent shell commands: the [Command Gate Cursor plugin](../cmdgate-cursor-plugin/README.md).
 - For Codex CLI shell commands: the [Command Gate Codex plugin](../cmdgate-codex-plugin/README.md) with IDE forwarding enabled.
@@ -225,7 +225,7 @@ bypass mode there is no prompt, so there is nothing to give a second opinion on.
 
 | Setting | Default | Purpose |
 |---|---|---|
-| `cmdgate.endpoint` | `http://127.0.0.1:8009/v1/systemone` | Where the app listens |
+| `cmdgate.endpoint` | `http://127.0.0.1:8019/v1/systemone` | Where the app listens |
 | `cmdgate.model` | `local` | Sent as `model`, e.g. to pick one of the app's four models |
 | `cmdgate.timeoutMs` | `3000` | Wait this long before showing "no answer" |
 | `cmdgate.threshold` | `0.5` | Probability at which a yes/no field shows "yes" |

@@ -5,13 +5,13 @@
 // probabilities from a few keyword rules. These are NOT model results and must
 // never be reported as such; every reply says so in its `summary`.
 //
-//   node vscode-extension/demo/mock-app.js            # http://127.0.0.1:8009/v1/systemone
+//   node vscode-extension/demo/mock-app.js            # http://127.0.0.1:8019/v1/systemone
 //   node vscode-extension/demo/mock-app.js --port 8010
 
 const http = require("http");
 
 const portArg = process.argv.indexOf("--port");
-const PORT = portArg > 0 ? Number(process.argv[portArg + 1]) : 8009;
+const PORT = portArg > 0 ? Number(process.argv[portArg + 1]) : 8019;
 
 // [pattern, risk level 0-4, dangerous, needs root]
 const RULES = [
