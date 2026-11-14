@@ -17,7 +17,8 @@
     "onStartupFinished"
   ],
   "scripts": {
-    "test": "node --test test/"
+    "test": "node --test test/",
+    "build:css": "tailwindcss -i styles/panel.css -o media/panel.css --minify"
   },
   "contributes": {
     "commands": [
@@ -145,5 +146,9 @@
         }
       }
     }
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.3.5",
+    "tailwindcss": "^4.3.5"
   }
 }

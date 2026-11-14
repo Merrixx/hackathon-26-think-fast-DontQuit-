@@ -4,9 +4,23 @@
 // one risk bar and two short facts. Older checks shrink to one line each.
 // Liquid-glass look: a soft backdrop glows in the status colour and shows through
 // layered glass (panel, darker inner card, pills). Everything else is silver.
-// No scripts run in it.
+// No scripts run in it. Styling is Tailwind: classes below, theme and the few
+// custom pieces (glass edge, glow, orb) in styles/panel.css. The built CSS is
+// inlined because the webview's CSP only allows inline styles.
 
+const fs = require("fs");
+const path = require("path");
 const core = require("./core");
+
+const CSS = fs.readFileSync(path.join(__dirname, "..", "media", "panel.css"), "utf8");
+
+// Glass layers: panel > darker inner card > pills. High contrast: no glass, solid outline.
+const HC = "hc:bg-transparent hc:backdrop-filter-none hc:outline hc:outline-hc hc:before:hidden";
+const GLASS = `glass-edge bg-tint backdrop-blur-[5px] backdrop-saturate-130 shadow-[0_10px_60px_rgba(15,15,15,.06)] ${HC}`;
+const PILL = `glass-edge inline-flex items-center gap-1 rounded-[18px] bg-pill px-3 py-1 backdrop-blur-[20px] lift hover:scale-105 hover:bg-hov ${HC}`;
+const GREY = ["offline", "na", "ready"];
+// Written out in full so Tailwind finds them when it scans this file
+const TONE = { stop: "tone-stop", caution: "tone-caution", go: "tone-go", offline: "tone-offline", na: "tone-na", ready: "tone-ready" };
 
 function esc(value) {
   return String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -37,154 +51,66 @@ const ICONS = {
 // One bar, five steps, the chosen step marked. Exact numbers sit in the tooltip.
 function scale(risk) {
   if (!risk) return "";
-  const steps = core.LEVELS.map((name, i) => `<i class="${i === risk.index ? "on " : ""}${i <= risk.index ? "lit" : ""}" title="${esc(name)}: ${core.pct(risk.probabilities[i])}"></i>`).join("");
-  return `<div class="scale" aria-label="Risk level: ${esc(risk.level)}"><span class="lbl">Risk level</span><span class="steps">${steps}</span><b>${esc(risk.level)}</b></div>`;
+  const step = (i) => i === risk.index ? "bg-tone shadow-[0_0_8px_color-mix(in_srgb,var(--c)_55%,transparent)]"
+    : i < risk.index ? "bg-tone/45" : "bg-track hc:bg-transparent hc:outline hc:outline-hc";
+  const steps = core.LEVELS.map((name, i) => `<i class="h-1.5 rounded-[3px] ${step(i)}" title="${esc(name)}: ${core.pct(risk.probabilities[i])}"></i>`).join("");
+  return `<div class="mx-1 mt-[14px] flex items-center gap-[10px] text-[12px]" aria-label="Risk level: ${esc(risk.level)}"><span class="text-quiet">Risk level</span><span class="grid flex-1 grid-cols-5 gap-[3px]">${steps}</span><b class="min-w-[58px] text-right capitalize">${esc(risk.level)}</b></div>`;
 }
 
 function fact(label, v) {
   const value = v ? (v.yes ? "yes" : "no") : "n/a";
-  return `<span class="pill fact${v && v.yes ? " yes" : ""}" title="${v ? core.pct(v.p) : "no answer"}">${esc(label)}: <b>${value}</b></span>`;
+  return `<span class="${PILL} text-[12px] text-quiet" title="${v ? core.pct(v.p) : "no answer"}">${esc(label)}: <b class="font-semibold ${v && v.yes ? "text-tone" : "text-ink"}">${value}</b></span>`;
 }
 
 function who(entry) {
   return entry.source === "Claude Code" ? "Claude Code wants to run" : entry.source === "manual" ? "You asked about" : "Checked from your selection";
 }
 
-const badge = (tone) => `<span class="dot"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[tone]}</svg></span>`;
+const badge = (tone) => `<span class="orb relative grid size-[42px] flex-none place-items-center rounded-full ${tone === "caution" ? "text-[#1d1d1f]" : "text-white"}">
+  <svg class="size-6 fill-none stroke-current stroke-[2.6] [stroke-linecap:round] [stroke-linejoin:round]" viewBox="0 0 24 24" aria-hidden="true">${ICONS[tone]}</svg></span>`;
+
+const TOP = "flex items-center gap-3";
+const WORD = "text-[22px] font-bold leading-[1.1] tracking-[-.01em]";
+const SUB = "mx-[2px] mt-[10px] text-quiet";
+const MAIN = `${GLASS} animate-rise rounded-[50px] px-[22px] py-5`;
 
 function slip(entry, h) {
   const about = entry.description || entry.summary;
   const r = entry.result;
-  return `<article class="glass main">
-    <div class="top">${badge(h.tone)}<div class="say"><div class="word">${esc(h.word)}</div><div class="text">${esc(h.text)}</div></div>
-      ${h.main != null ? `<div class="num"><b>${Math.round(h.main * 100)}<small>%</small></b><span>${h.mainLabel}</span></div>` : ""}</div>
-    <p class="sub">${esc(h.sub)}</p>
-    <div class="card">
-      <div class="meta"><span>${esc(who(entry))}</span><time>${esc(entry.at.toLocaleTimeString())}</time></div>
-      <pre class="command"><code>${esc(entry.command)}</code></pre>
-      ${about ? `<p class="about">${esc(about)}</p>` : ""}
+  return `<article class="${MAIN}">
+    <div class="${TOP}">${badge(h.tone)}<div class="min-w-0 flex-1"><div class="${WORD} ${GREY.includes(h.tone) ? "text-ink" : "text-tone"}">${esc(h.word)}</div><div class="text-[13px] font-semibold">${esc(h.text)}</div></div>
+      ${h.main != null ? `<div class="text-right leading-none"><b class="text-[28px] font-bold tabular-nums">${Math.round(h.main * 100)}<small class="ml-px text-[14px] font-semibold">%</small></b><span class="mt-[3px] block text-[11px] text-quiet">${h.mainLabel}</span></div>` : ""}</div>
+    <p class="${SUB}">${esc(h.sub)}</p>
+    <div class="glass-edge mt-3 rounded-[26px] bg-card px-[14px] pt-[10px] pb-3 ${HC}">
+      <div class="flex justify-between text-[12px] text-quiet"><span>${esc(who(entry))}</span><time>${esc(entry.at.toLocaleTimeString())}</time></div>
+      <pre class="mt-1 font-mono text-[13px]/[1.45] whitespace-pre-wrap [word-break:break-word]"><code class="font-mono">${esc(entry.command)}</code></pre>
+      ${about ? `<p class="mt-1.5 text-[12px] text-quiet">${esc(about)}</p>` : ""}
     </div>
-    ${r ? `${scale(r.risk)}<div class="facts">${fact("Dangerous", r.dangerous)}${fact("Needs root access", r.root)}</div>` : ""}
+    ${r ? `${scale(r.risk)}<div class="mt-3 flex flex-wrap gap-1.5">${fact("Dangerous", r.dangerous)}${fact("Needs root access", r.root)}</div>` : ""}
   </article>`;
 }
 
 function row(entry) {
   const h = headline(entry);
-  return `<li class="row t-${h.tone}"><span class="pin"></span><code>${esc(core.shorten(entry.command, 70))}</code>
-    <span class="lvl">${esc(h.word)}</span><time>${esc(entry.at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }))}</time></li>`;
+  return `<li class="${TONE[h.tone]} grid grid-cols-[8px_minmax(0,1fr)_auto_auto] items-center gap-[10px] rounded-[15px] px-2 py-1.5 lift hover:scale-[1.025] hover:bg-hov [&+&]:shadow-[0_-1px_0_var(--color-line)]"><span class="size-2 rounded-full bg-tone shadow-[0_0_6px_color-mix(in_srgb,var(--c)_60%,transparent)]"></span><code class="truncate font-mono text-[12px]">${esc(core.shorten(entry.command, 70))}</code>
+    <span class="text-[12px] text-quiet">${esc(h.word)}</span><time class="text-[12px] text-quiet">${esc(entry.at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }))}</time></li>`;
 }
 
 function renderPanel(history, endpoint) {
   const [latest, ...older] = history;
   const tone = latest ? headline(latest).tone : "ready";
   const body = latest
-    ? `${slip(latest, headline(latest))}${older.length ? `<section class="glass earlier"><h2 class="pill">Earlier checks</h2><ol>${older.slice(0, 6).map(row).join("")}</ol></section>` : ""}`
-    : `<article class="glass main"><div class="top">${badge("ready")}<div class="say"><div class="word">Ready</div>
-       <div class="text">Waiting for a permission prompt</div></div></div>
-       <p class="sub">When Claude Code asks to run a shell command, the second opinion appears here.
+    ? `${slip(latest, headline(latest))}${older.length ? `<section class="${GLASS} rounded-[34px] px-[18px] pt-[14px] pb-[10px]"><h2 class="${PILL} mb-1.5 text-[12px] font-semibold">Earlier checks</h2><ol class="list-none">${older.slice(0, 6).map(row).join("")}</ol></section>` : ""}`
+    : `<article class="${MAIN}"><div class="${TOP}">${badge("ready")}<div class="min-w-0 flex-1"><div class="${WORD} text-ink">Ready</div>
+       <div class="text-[13px] font-semibold">Waiting for a permission prompt</div></div></div>
+       <p class="${SUB}">When Claude Code asks to run a shell command, the second opinion appears here.
        To try it now, run <b>Command Gate: Check command…</b> from the Command Palette.</p></article>`;
   return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';">
-<style>
-  :root {
-    --ink: #f2f2f2; --quiet: rgba(255,255,255,.62); --base: #0c0c0e;
-    --tint: rgba(0,0,0,.07); --card: rgba(21,21,21,.22); --pill: rgba(21,21,21,.22); --hov: rgba(255,255,255,.10);
-    --track: rgba(255,255,255,.10); --line: rgba(255,255,255,.07); --silver: rgba(210,210,215,.10);
-    --edge: linear-gradient(180deg,rgba(181,181,181,.41) 0%,rgba(181,181,181,.25) 20%,rgba(48,48,48,.31) 30%,rgba(16,16,16,.31) 65%,rgba(48,48,48,.31) 75%,rgba(172,172,172,.31) 100%);
-    --red: #f2555a; --amber: #f0b429; --green: #3ecf8e; --grey: #9a9aa0;
-  }
-  body.vscode-light {
-    --ink: #1d1d1f; --quiet: rgba(0,0,0,.58); --base: #e9e9ec;
-    --tint: rgba(255,255,255,.30); --card: rgba(255,255,255,.42); --pill: rgba(255,255,255,.48); --hov: rgba(255,255,255,.75);
-    --track: rgba(0,0,0,.09); --line: rgba(0,0,0,.07); --silver: rgba(120,120,130,.16);
-    --edge: linear-gradient(180deg,#fff 0%,rgba(255,255,255,.7) 20%,rgba(48,48,48,.14) 35%,rgba(16,16,16,.12) 65%,rgba(255,255,255,.7) 80%,#fff 100%);
-    --red: #d92d3a; --amber: #c27c0e; --green: #1f9d63; --grey: #7a7a80;
-  }
-  .t-stop { --c: var(--red); } .t-caution { --c: var(--amber); } .t-go { --c: var(--green); }
-  .t-offline, .t-na, .t-ready { --c: var(--grey); }
-
-  * { box-sizing: border-box; }
-  html, body { overflow-x: hidden; }
-  body { margin: 0; color: var(--ink); background: var(--base); font: 13px/1.45 var(--vscode-font-family, "Segoe UI Variable", "Segoe UI", system-ui, sans-serif); }
-  /* The backdrop the glass shows: the status colour glows softly, the rest is silver */
-  .stage { min-height: 100vh; padding: 18px 16px 24px; display: grid; gap: 12px; align-content: start;
-    background:
-      radial-gradient(120% 60% at 12% 0%, color-mix(in srgb, var(--c) 42%, transparent), transparent 62%),
-      radial-gradient(70% 45% at 95% 30%, var(--silver), transparent 70%),
-      radial-gradient(90% 50% at 30% 100%, color-mix(in srgb, var(--c) 14%, transparent), transparent 70%),
-      var(--base); }
-  .stage > * { width: 100%; max-width: 560px; }
-
-  /* Glass layers: panel > darker inner card > pills, each with the 1 px glass edge */
-  .glass, .card, .pill { position: relative; isolation: isolate; }
-  .glass::before, .card::before, .pill::before { content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px; background: var(--edge); pointer-events: none;
-    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
-  .glass { background: var(--tint); backdrop-filter: blur(5px) saturate(1.3); -webkit-backdrop-filter: blur(5px) saturate(1.3);
-    border-radius: 50px; box-shadow: 0 10px 60px rgba(15,15,15,.06); }
-  .card { background: var(--card); border-radius: 26px; padding: 10px 14px 12px; margin-top: 12px; }
-  .pill { display: inline-flex; align-items: center; gap: 4px; background: var(--pill); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-    border-radius: 18px; padding: 4px 12px; transition: background-color .083s ease-in-out, transform .12s; }
-  .pill:hover { background: var(--hov); transform: scale(1.05); }
-
-  .main { padding: 20px 22px 20px; animation: rise .35s ease-out both; }
-  .top { display: flex; align-items: center; gap: 12px; }
-  .dot { position: relative; width: 42px; height: 42px; border-radius: 50%; flex: none; display: grid; place-items: center; color: #fff;
-    background: radial-gradient(circle at 35% 28%, color-mix(in srgb, #fff 35%, var(--c)), var(--c) 62%);
-    box-shadow: inset 0 1px 1px rgba(255,255,255,.45), inset 0 -2px 4px rgba(0,0,0,.18), 0 4px 18px color-mix(in srgb, var(--c) 40%, transparent); }
-  .t-caution .dot { color: #1d1d1f; }
-  .dot svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
-  .say { flex: 1; min-width: 0; }
-  .word { font-size: 22px; font-weight: 700; line-height: 1.1; color: var(--c); letter-spacing: -.01em; }
-  .t-offline .word, .t-na .word, .t-ready .word { color: var(--ink); }
-  .text { font-size: 13px; font-weight: 600; }
-  .num { text-align: right; line-height: 1; }
-  .num b { font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; }
-  .num small { font-size: 14px; font-weight: 600; margin-left: 1px; }
-  .num span { display: block; font-size: 11px; color: var(--quiet); margin-top: 3px; }
-  .sub { margin: 10px 2px 0; color: var(--quiet); }
-
-  .meta { display: flex; justify-content: space-between; color: var(--quiet); font-size: 12px; }
-  .command { margin: 4px 0 0; white-space: pre-wrap; word-break: break-word; font: 13px/1.45 var(--vscode-editor-font-family, Consolas, monospace); }
-  .about { margin: 6px 0 0; color: var(--quiet); font-size: 12px; }
-
-  .scale { display: flex; align-items: center; gap: 10px; margin: 14px 4px 0; font-size: 12px; }
-  .scale .lbl { color: var(--quiet); }
-  .steps { flex: 1; display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px; }
-  .steps i { height: 6px; border-radius: 3px; background: var(--track); }
-  .steps i.lit { background: color-mix(in srgb, var(--c) 45%, transparent); }
-  .steps i.on { background: var(--c); box-shadow: 0 0 8px color-mix(in srgb, var(--c) 55%, transparent); }
-  .scale b { min-width: 58px; text-align: right; text-transform: capitalize; }
-
-  .facts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
-  .fact { font-size: 12px; color: var(--quiet); }
-  .fact b { color: var(--ink); font-weight: 600; }
-  .fact.yes b { color: var(--c); }
-
-  .earlier { padding: 14px 18px 10px; border-radius: 34px; }
-  h2 { margin: 0 0 6px; font-size: 12px; font-weight: 600; }
-  .earlier ol { list-style: none; margin: 0; padding: 0; }
-  .row { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 6px 8px; border-radius: 15px;
-    transition: background-color .083s ease-in-out, transform .12s; }
-  .row:hover { background: var(--hov); transform: scale(1.025); }
-  .row + .row { box-shadow: 0 -1px 0 var(--line); }
-  .pin { width: 8px; height: 8px; border-radius: 50%; background: var(--c); box-shadow: 0 0 6px color-mix(in srgb, var(--c) 60%, transparent); }
-  .row code { font-family: var(--vscode-editor-font-family, Consolas, monospace); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .row .lvl, .row time { color: var(--quiet); font-size: 12px; }
-
-  footer { font-size: 11.5px; color: var(--quiet); padding: 0 8px; }
-  @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
-
-  /* High contrast: theme colours, no glass, solid borders */
-  body.vscode-high-contrast { --ink: var(--vscode-foreground, #fff); --quiet: var(--vscode-foreground, #fff); }
-  body.vscode-high-contrast .stage { background: var(--vscode-editor-background, #000); }
-  body.vscode-high-contrast .glass, body.vscode-high-contrast .card, body.vscode-high-contrast .pill {
-    backdrop-filter: none; background: transparent; outline: 1px solid var(--vscode-contrastBorder, #6fc3df); }
-  body.vscode-high-contrast .glass::before, body.vscode-high-contrast .card::before, body.vscode-high-contrast .pill::before { display: none; }
-  body.vscode-high-contrast .steps i:not(.lit) { background: transparent; outline: 1px solid var(--vscode-contrastBorder, #6fc3df); }
-</style></head><body>
-<main class="stage t-${tone}">
+<style>${CSS}</style></head><body class="overflow-x-hidden bg-base font-sans text-[13px]/[1.45] text-ink">
+<main class="${TONE[tone]} stage-glow grid min-h-screen content-start gap-3 px-4 pt-[18px] pb-6 *:w-full *:max-w-[560px] hc:bg-none hc:bg-[var(--vscode-editor-background,#000)]">
 ${body}
-<footer>Advice only: your answer in the permission prompt decides. Answers come from the local app at ${esc(endpoint)}.</footer>
+<footer class="px-2 text-[11.5px] text-quiet">Advice only: your answer in the permission prompt decides. Answers come from the local app at ${esc(endpoint)}.</footer>
 </main>
 </body></html>`;
 }

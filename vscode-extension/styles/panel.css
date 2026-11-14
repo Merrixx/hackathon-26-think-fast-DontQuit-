@@ -1,0 +1,65 @@
+/* Tailwind input for the second-opinion panel (src/panel.js).
+   Build: npm run build:css  ->  media/panel.css (committed, inlined into the webview). */
+@import "tailwindcss" source(none);
+@source "../src/panel.js";
+
+@custom-variant light (&:where(.vscode-light *));
+@custom-variant hc (&:where(.vscode-high-contrast *));
+
+@theme static {
+  --font-sans: var(--vscode-font-family, "Segoe UI Variable", "Segoe UI", system-ui, sans-serif);
+  --font-mono: var(--vscode-editor-font-family, Consolas, monospace);
+  --color-ink: #f2f2f2; --color-quiet: rgba(255,255,255,.62); --color-base: #0c0c0e;
+  --color-tint: rgba(0,0,0,.07); --color-card: rgba(21,21,21,.22); --color-pill: rgba(21,21,21,.22); --color-hov: rgba(255,255,255,.10);
+  --color-track: rgba(255,255,255,.10); --color-line: rgba(255,255,255,.07); --color-silver: rgba(210,210,215,.10);
+  --color-red: #f2555a; --color-amber: #f0b429; --color-green: #3ecf8e; --color-grey: #9a9aa0;
+  --animate-rise: rise .35s ease-out both;
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+}
+/* Colours that point at other variables are used as they are, not resolved on :root */
+@theme inline {
+  --color-tone: var(--c);
+  --color-hc: var(--vscode-contrastBorder, #6fc3df);
+}
+
+@layer base {
+  :root { --edge: linear-gradient(180deg,rgba(181,181,181,.41) 0%,rgba(181,181,181,.25) 20%,rgba(48,48,48,.31) 30%,rgba(16,16,16,.31) 65%,rgba(48,48,48,.31) 75%,rgba(172,172,172,.31) 100%); }
+  .vscode-light {
+    --color-ink: #1d1d1f; --color-quiet: rgba(0,0,0,.58); --color-base: #e9e9ec;
+    --color-tint: rgba(255,255,255,.30); --color-card: rgba(255,255,255,.42); --color-pill: rgba(255,255,255,.48); --color-hov: rgba(255,255,255,.75);
+    --color-track: rgba(0,0,0,.09); --color-line: rgba(0,0,0,.07); --color-silver: rgba(120,120,130,.16);
+    --edge: linear-gradient(180deg,#fff 0%,rgba(255,255,255,.7) 20%,rgba(48,48,48,.14) 35%,rgba(16,16,16,.12) 65%,rgba(255,255,255,.7) 80%,#fff 100%);
+    --color-red: #d92d3a; --color-amber: #c27c0e; --color-green: #1f9d63; --color-grey: #7a7a80;
+  }
+  .vscode-high-contrast { --color-ink: var(--vscode-foreground, #fff); --color-quiet: var(--vscode-foreground, #fff); }
+}
+
+/* Status colour of a block: everything inside uses it as --c */
+@utility tone-stop { --c: var(--color-red); }
+@utility tone-caution { --c: var(--color-amber); }
+@utility tone-go { --c: var(--color-green); }
+@utility tone-offline { --c: var(--color-grey); }
+@utility tone-na { --c: var(--color-grey); }
+@utility tone-ready { --c: var(--color-grey); }
+
+/* The backdrop the glass shows: the status colour glows softly, the rest is silver */
+@utility stage-glow {
+  background:
+    radial-gradient(120% 60% at 12% 0%, color-mix(in srgb, var(--c) 42%, transparent), transparent 62%),
+    radial-gradient(70% 45% at 95% 30%, var(--color-silver), transparent 70%),
+    radial-gradient(90% 50% at 30% 100%, color-mix(in srgb, var(--c) 14%, transparent), transparent 70%),
+    var(--color-base);
+}
+/* The 1 px liquid-glass edge: light at top and bottom, dark in the middle */
+@utility glass-edge {
+  position: relative; isolation: isolate;
+  &::before { content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px; background: var(--edge); pointer-events: none;
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
+}
+/* Status orb: lit from the top left */
+@utility orb {
+  background: radial-gradient(circle at 35% 28%, color-mix(in srgb, #fff 35%, var(--c)), var(--c) 62%);
+  box-shadow: inset 0 1px 1px rgba(255,255,255,.45), inset 0 -2px 4px rgba(0,0,0,.18), 0 4px 18px color-mix(in srgb, var(--c) 40%, transparent);
+}
+/* Hover lift: quick colour, slightly slower grow */
+@utility lift { transition: background-color .083s ease-in-out, scale .12s, transform .12s; }
