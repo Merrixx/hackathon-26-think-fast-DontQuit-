@@ -3,12 +3,14 @@
 // A script injected into a chat webview can ask "what did Command Gate say about this
 // command?" and draw the answer next to the Allow/Deny prompt itself.
 //
+// GET /explain?cmd=<command>&lang=<code>  ->  200 JSON breakdown in that language.
 // GET /card?cmd=<command>  ->  200 JSON card, or 204 when no check finished within the wait.
 // Only answers webview origins (vscode-webview://), so a website open in a browser
 // cannot read the commands. Binds to 127.0.0.1 only. Never approves or denies anything.
 
 const http = require("http");
 const { headline } = require("./panel");
+const { explain } = require("./explain");
 
 const WAIT_MS = 8000;
 const FRESH_MS = 5 * 60 * 1000;
@@ -52,6 +54,12 @@ function startCardServer({ port, getHistory, waitMs = WAIT_MS, host = "127.0.0.1
     }
     const url = new URL(req.url, "http://127.0.0.1");
     const cmd = url.searchParams.get("cmd");
+    // GET /explain?cmd=&lang= -> plain-language breakdown (offline dictionary, no model call)
+    if (req.method === "GET" && url.pathname === "/explain" && cmd) {
+      res.writeHead(200, { ...cors, "Content-Type": "application/json", "Cache-Control": "no-store" })
+        .end(JSON.stringify(explain(cmd, url.searchParams.get("lang") || "en")));
+      return;
+    }
     if (req.method !== "GET" || url.pathname !== "/card" || !cmd) {
       res.writeHead(404, cors).end();
       return;
