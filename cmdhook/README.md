@@ -26,7 +26,7 @@ uv run --extra ml python -m cmdhook.setup
 - lists the other models found on disk, and
 - prints the hook entry for Claude Code's settings.
 
-Weights are trained, not downloaded. For a missing model the output names the command that makes it. The exit code is 0 only when every selected model is ready. `--no-load` checks the files without loading the models.
+Weights are not in git: `uv run --extra ml python -m cmdgate.fetch_models` downloads the published ones (Kev adapter and n-gram models; `--all` adds the encoders). For a model that is still missing the output names the command that makes it. The exit code is 0 only when every selected model is ready. `--no-load` checks the files without loading the models.
 
 ## Start
 
