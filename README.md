@@ -9,7 +9,6 @@ The command gate reads one shell command an AI coding agent wants to run and dec
 ```bash
 uv sync --extra ml
 git clone https://github.com/jaredpalmer/kev.git ../kev && git -C ../kev checkout 2074cc4 && (cd ../kev && uv sync --extra serve)
-uv run --extra ml hf auth login                                  # the model repo is private: you need a token with access to it
 uv run --extra ml python -m cmdgate.fetch_data --only cli-command-risk
 uv run --extra ml python -m cmdgate.fetch_models                 # Kev adapter, n-gram models, Kev's base model (about 1.8 GB)
 uv run --extra ml python -m cmdhook.setup                        # writes cmdhook/.env and prints the Claude Code hook entry
@@ -25,7 +24,7 @@ cd ki-guard && npm start                                         # the dashboard
 
 - **Claude Code hook:** paste the entry `cmdhook.setup` printed into `.claude/settings.json` ([cmdhook/README.md](cmdhook/README.md)).
 - **Plugins:** [Claude Code](cmdgate-claude-plugin/README.md), [Cursor](cmdgate-cursor-plugin/README.md) and [Codex](cmdgate-codex-plugin/README.md) show the backend's decision and every model's result under the permission prompt.
-- **Model repo access:** the weights are in a private Hugging Face repo under a personal account, which cannot be shared with other accounts. Until it is made public or moved to an organisation, only its owner can run the fetch.
+- **Models:** the weights are in a public Hugging Face repo, [felixuhmann/cmdgate-models](https://huggingface.co/felixuhmann/cmdgate-models); no login is needed.
 
 ## Our project: local yes/no tagging with Kev and Adaption
 
@@ -130,7 +129,7 @@ uv run --extra ml python -m cmdgate.evaluate --endpoint http://127.0.0.1:8011/v1
 
 ### Models: fetch instead of training
 
-The trained weights are not in git. They sit in one private Hugging Face model repo, pinned by revision in `cmdgate/models.json`; log in once with `uv run --extra ml hf auth login` (a token with access to that repo).
+The trained weights are not in git. They sit in one public Hugging Face model repo, [felixuhmann/cmdgate-models](https://huggingface.co/felixuhmann/cmdgate-models), pinned by revision in `cmdgate/models.json`. No login is needed.
 
 ```bash
 uv run --extra ml python -m cmdgate.fetch_models          # Kev adapter, both n-gram models, and Kev's base model into the local cache (about 1.8 GB)

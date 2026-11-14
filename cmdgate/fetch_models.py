@@ -8,8 +8,8 @@ Weights are never committed. They live in one Hugging Face model repo whose
 files sit at the paths they have in this checkout (`models/...`,
 `runs/<run>/checkpoint/...`), so a download lands them in place. The repo id
 and the exact revision are recorded in `cmdgate/models.json`, which is
-committed: every checkout fetches the same bytes. A private repo needs
-`hf auth login` first.
+committed: every checkout fetches the same bytes. The repo is public, so a
+fetch needs no login; publishing needs `hf auth login` with write access.
 
 Kev serves an adapter on top of a base model. The base is fetched from its own
 public repo at the revision the adapter was trained on and kept in the Hugging
@@ -95,10 +95,10 @@ def main() -> None:
     parser.add_argument("--all", action="store_true", help="also fetch the encoders (about 5.8 GB)")
     parser.add_argument("--no-base", action="store_true", help="skip Kev's base model")
     parser.add_argument("--publish", metavar="REPO_ID", help="upload the local models to this model repo instead")
-    parser.add_argument("--public", action="store_true", help="with --publish: create the repo public")
+    parser.add_argument("--private", action="store_true", help="with --publish: create the repo private")
     args = parser.parse_args()
     if args.publish:
-        publish(args.publish, private=not args.public)
+        publish(args.publish, private=args.private)
     else:
         fetch(args.all, base=not args.no_base)
 
