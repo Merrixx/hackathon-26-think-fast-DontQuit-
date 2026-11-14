@@ -1,0 +1,44 @@
+{
+  "name": "cmdgate",
+  "version": "0.1.0",
+  "description": "A second opinion on Cursor Agent shell commands: safe/unsafe, risk level, dangerous and root access, from your locally running Command Gate app.",
+  "keywords": ["security", "shell", "permissions", "hooks", "cmdgate"],
+  "license": "MIT",
+  "hooks": "hooks/hooks.json",
+  "variables": {
+    "type": "object",
+    "properties": {
+      "CMDGATE_ENDPOINT": {
+        "type": "string",
+        "title": "Backend endpoint",
+        "description": "Decision API endpoint of the locally running Command Gate app.",
+        "default": "http://127.0.0.1:8009/v1/systemone"
+      },
+      "CMDGATE_MODEL": {
+        "type": "string",
+        "title": "Model",
+        "description": "Value sent as `model` in each request, to pick one of the app's models.",
+        "default": "local"
+      },
+      "CMDGATE_TIMEOUT_MS": {
+        "type": "string",
+        "title": "Timeout (ms)",
+        "description": "How long to wait for the app before saying there is no answer.",
+        "default": "3000"
+      },
+      "CMDGATE_THRESHOLD": {
+        "type": "string",
+        "title": "Yes threshold",
+        "description": "Probability at or above which a yes/no answer reads as yes.",
+        "default": "0.5"
+      },
+      "CMDGATE_FORWARD_TO_IDE": {
+        "type": "string",
+        "title": "Forward to IDE add-ons",
+        "description": "Also send each result to IDE add-ons listening on this machine (e.g. the Command Gate VS Code add-on). Set to \"false\" to disable.",
+        "default": "true",
+        "enum": ["true", "false"]
+      }
+    }
+  }
+}

@@ -17,7 +17,8 @@
     "onStartupFinished"
   ],
   "scripts": {
-    "test": "node --test test/"
+    "test": "node --test test/",
+    "build:css": "tailwindcss -i styles/panel.css -o media/panel.css --minify && tailwindcss -i styles/explainer.css -o demo/explainer.css --minify"
   },
   "contributes": {
     "commands": [
@@ -34,16 +35,6 @@
       {
         "command": "cmdgate.showPanel",
         "title": "Show second opinions",
-        "category": "Command Gate"
-      },
-      {
-        "command": "cmdgate.installClaudeHook",
-        "title": "Install Claude Code hook",
-        "category": "Command Gate"
-      },
-      {
-        "command": "cmdgate.removeClaudeHook",
-        "title": "Remove Claude Code hook",
         "category": "Command Gate"
       }
     ],
@@ -126,6 +117,13 @@
           "default": true,
           "description": "Open the second-opinion card beside the editor (without taking focus) when a command is checked."
         },
+        "cmdgate.chatCardPort": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 65535,
+          "description": "Experimental. 0 = off. When set, serves the latest result for a command on 127.0.0.1:<port>/card, readable only by VS Code webviews, so a patched chat view can show the card inline. Reload the window after changing it."
+        },
         "cmdgate.notifyOnPrompt": {
           "type": "string",
           "enum": [
@@ -138,5 +136,9 @@
         }
       }
     }
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.3.5",
+    "tailwindcss": "^4.3.5"
   }
 }

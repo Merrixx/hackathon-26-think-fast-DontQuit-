@@ -1,0 +1,37 @@
+{
+  "name": "cmdgate",
+  "version": "0.1.0",
+  "description": "A second opinion under Claude Code's permission prompt for shell commands: safe/unsafe, risk level, dangerous and root access, from your locally running Command Gate app.",
+  "userConfig": {
+    "endpoint": {
+      "type": "string",
+      "title": "Backend endpoint",
+      "description": "Decision API endpoint of the locally running Command Gate app.",
+      "default": "http://127.0.0.1:8009/v1/systemone"
+    },
+    "model": {
+      "type": "string",
+      "title": "Model",
+      "description": "Value sent as `model` in each request, to pick one of the app's models.",
+      "default": "local"
+    },
+    "timeoutMs": {
+      "type": "number",
+      "title": "Timeout (ms)",
+      "description": "How long to wait for the app before showing 'no answer'.",
+      "default": 3000
+    },
+    "threshold": {
+      "type": "number",
+      "title": "Yes threshold",
+      "description": "Probability at or above which a yes/no answer reads as yes.",
+      "default": 0.5
+    },
+    "forwardToIde": {
+      "type": "boolean",
+      "title": "Forward to IDE add-ons",
+      "description": "Also send each result to IDE add-ons listening on this machine (e.g. the Command Gate VS Code add-on).",
+      "default": true
+    }
+  }
+}
