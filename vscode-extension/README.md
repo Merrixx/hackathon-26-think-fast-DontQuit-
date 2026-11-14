@@ -22,13 +22,15 @@ and it runs no model itself: every answer comes from the app.
 
 ## Where it checks commands
 
-Commands that already ran in a terminal are not checked: only what an agent
-asks permission for, or what you check by hand.
+Commands that already ran in a terminal are not checked: only pending commands
+forwarded by an agent plugin, or what you check by hand. Cursor and Codex hooks
+can forward commands that would not otherwise need approval.
 
 | Source | When | How |
 |---|---|---|
 | **Claude Code permission prompts** | Exactly when Claude Code asks you to approve a shell command | The [Command Gate Claude Code plugin](../cmdgate-claude-plugin/README.md) asks the app and forwards the command and its answer here. The prompt is unchanged |
 | **Cursor Agent shell commands** | When Cursor Agent is about to run a shell command | The [Command Gate Cursor plugin](../cmdgate-cursor-plugin/README.md) asks the app, attaches a message, and forwards here |
+| **Codex CLI shell commands** | Before a matching shell command runs | The [Command Gate Codex plugin](../cmdgate-codex-plugin/README.md) asks the app, emits a CLI advisory, and optionally forwards here |
 | **By hand** | Any time | *Command Gate: Check command…*, or select text → right-click → *Check selection* |
 
 Results open as a **second-opinion card** beside the editor, without taking
@@ -46,6 +48,7 @@ the plain toast is off by default (`cmdgate.notifyOnPrompt`).
   `http://127.0.0.1:8009/v1/systemone`.
 - For Claude Code prompts: the [Command Gate Claude Code plugin](../cmdgate-claude-plugin/README.md).
 - For Cursor Agent shell commands: the [Command Gate Cursor plugin](../cmdgate-cursor-plugin/README.md).
+- For Codex CLI shell commands: the [Command Gate Codex plugin](../cmdgate-codex-plugin/README.md) with IDE forwarding enabled.
 
 No npm packages are needed; the add-on uses only Node and VS Code built-ins.
 

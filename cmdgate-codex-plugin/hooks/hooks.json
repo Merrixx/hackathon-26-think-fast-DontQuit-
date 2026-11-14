@@ -1,0 +1,18 @@
+{
+  "description": "Command Gate: advisory evaluation of shell commands before execution.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "^Bash$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"import(require('node:url').pathToFileURL(process.env.PLUGIN_ROOT + '/scripts/gate.mjs').href)\"",
+            "timeout": 5,
+            "statusMessage": "Command Gate: checking shell command"
+          }
+        ]
+      }
+    ]
+  }
+}

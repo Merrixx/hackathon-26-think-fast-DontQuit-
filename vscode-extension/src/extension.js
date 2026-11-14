@@ -142,7 +142,7 @@ async function activate(context) {
     vscode.commands.registerCommand("cmdgate.showPanel", showPanel),
   );
 
-  // Listener for the Claude Code plugin (and any other tool that speaks its protocol).
+  // Listener for Command Gate plugins (Claude Code, Cursor, Codex, or the same protocol).
   try {
     const { server, token, port } = await bridge.startListener(async (event) => {
       const answer = event.result && typeof event.result === "object" ? event.result : null;
@@ -159,9 +159,9 @@ async function activate(context) {
       }),
       { dispose: () => { bridge.removeDiscovery(file); server.close(); } },
     );
-    output.appendLine(`listening for Claude Code permission prompts on 127.0.0.1:${port}`);
+    output.appendLine(`listening for Command Gate plugin events on 127.0.0.1:${port}`);
   } catch (err) {
-    output.appendLine(`could not start the listener for the Claude Code plugin: ${err.message}`);
+    output.appendLine(`could not start the Command Gate plugin listener: ${err.message}`);
   }
 }
 
