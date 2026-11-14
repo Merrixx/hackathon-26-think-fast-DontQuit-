@@ -146,11 +146,19 @@ class DecideTest(unittest.TestCase):
                 self.assertFalse(decide(failed, Config(combine=combine, threshold=0.9))["passed"])
         self.assertTrue(decide(failed, Config(combine="any", threshold=0.9))["passed"])
 
-    def test_the_summary_has_a_line_per_model(self):
+    def test_the_summary_is_the_command_gate_block_with_a_row_per_model(self):
         text = decide(scores(ngram=0.01, encoder=0.9), Config(), "rm -rf /")["summary"]
-        self.assertIn("cmdhook: ASK", text)
-        self.assertRegex(text, r"ngram\s+risk 0\.010 <= 0\.500\s+pass")
-        self.assertRegex(text, r"encoder\s+risk 0\.900 >  0\.500\s+fail")
+        self.assertTrue(text.startswith("Command Gate\n  Verdict    🔴 UNSAFE"))
+        self.assertIn("  Models     ASK · 1 of 2 models above their threshold: encoder", text)
+        self.assertIn("  ngram      🟢 pass        1%", text)
+        self.assertIn("  encoder    🔴 FAIL       90%", text)
+        self.assertIn("  Risk       ⚪ n/a", text)
+
+    def test_the_summary_reads_risk_and_dangerous_from_the_levels(self):
+        rows = {"ngram": {"p": 0.9, "ms": 1.0, "failed": False, "levels": [0.05, 0.05, 0.1, 0.2, 0.6]}}
+        text = decide(rows, Config(), "rm -rf /")["summary"]
+        self.assertIn("  Risk       🔴 critical   60%", text)
+        self.assertIn("  Dangerous  🔴 yes        80%", text)
 
 
 class BackendTest(unittest.TestCase):
@@ -220,8 +228,8 @@ class BackendTest(unittest.TestCase):
         call = json.dumps({"hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": {"command": "ls"}})
         out = json.loads(self.hook(stdin=call).stdout)
         self.assertEqual(out["hookSpecificOutput"]["permissionDecision"], "allow")
-        self.assertIn("risk 0.020 <= 0.500", out["hookSpecificOutput"]["permissionDecisionReason"])
-        self.assertIn("cmdhook: ALLOW", out["systemMessage"])
+        self.assertIn("  low        🟢 pass        2%", out["hookSpecificOutput"]["permissionDecisionReason"])
+        self.assertIn("Models     ALLOW", out["systemMessage"])
         self.assertNotIn("systemMessage", json.loads(self.hook(stdin=call, CMDHOOK_QUIET="1").stdout))
 
     @unittest.skipUnless(shutil.which("node"), "node is not installed")
@@ -237,8 +245,8 @@ class BackendTest(unittest.TestCase):
         self.serve(Config(), low=0.02, high=0.96)
         done = self.hook("check", "git", "push", "--force")
         self.assertEqual(done.returncode, 1)
-        self.assertIn("command: git push --force", done.stdout)
-        self.assertRegex(done.stdout, r"high\s+risk 0\.960 >  0\.500\s+fail")
+        self.assertTrue(done.stdout.startswith("Command Gate\n  Verdict    🔴 UNSAFE"))
+        self.assertIn("  high       🔴 FAIL       96%", done.stdout)
 
     @unittest.skipUnless(shutil.which("node"), "node is not installed")
     def test_an_unreachable_backend_follows_on_error(self):

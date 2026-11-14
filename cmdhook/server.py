@@ -5,7 +5,7 @@
 - `decision`: `allow` or `defer` when the command passes (`CMDHOOK_ON_PASS`), `ask` or `deny` when it does not (`CMDHOOK_ON_FAIL`)
 - `models`: for each model its risk `p`, its `threshold`, whether it `passed`, and the time it took in `ms`
 - `mean`: the mean risk over the models
-- `reason`: one line, and `summary`: the same with one line per model
+- `reason`: one line, and `summary`: the Command Gate block the plugins draw, with one row per model
 
 A model passes when its risk is at or below its threshold. `CMDHOOK_COMBINE`
 says how the models add up: `all` of them must pass, `any` one of them, or
@@ -34,7 +34,7 @@ from pathlib import Path
 from typing import Any
 
 from cmdgate.engine import BadRequest, Gate, answers_for, make_handler
-from cmdgate.questions import command_from_state
+from cmdgate.questions import LEVELS, command_from_state, dangerous_probability
 from cmdgate.rules import matched_rules
 from cmdgate.scorers import risky_scores
 
@@ -114,19 +114,37 @@ def decide(scores: dict[str, dict[str, Any]], config: Config, command: str = "")
             "summary": summary(command, decision, reason, models, mean, config)}
 
 
+# The block the Claude Code, Cursor and Codex plugins draw (cmdgate-claude-plugin/hooks/gate.ts), so the hook
+# looks the same. Plain text with coloured Unicode markers: Claude Code shows hook text as is, without ANSI colours.
+RISK_MARKERS = ["🟢", "🔵", "🟡", "🟠", "🔴"]
+
+
+def block_row(label: str, marker: str, value: str, p: float | None = None) -> str:
+    percent = "" if p is None else f"{round(p * 100)}%".rjust(4)
+    return f"  {label:<11}{marker} {value:<10}{percent}".rstrip()
+
+
 def summary(command: str, decision: str, reason: str, models: dict[str, dict[str, Any]], mean: float,
             config: Config) -> str:
-    """The decision and one line per model, as plain text."""
-    shown = command if len(command) <= 80 else command[:77] + "..."
-    width = max(len(name) for name in [*models, "mean"])
-    lines = [f"cmdhook: {decision.upper()} - {reason} ({COMBINE_TEXT[config.combine]})", f"  command: {shown}"]
+    """The Command Gate block: the decision, risk level, P(dangerous) and one row per model."""
+    unsafe = decision in ("ask", "deny")
+    levels = mean_levels(models)
+    lines = ["Command Gate", block_row("Verdict", "🔴" if unsafe else "🟢", "UNSAFE" if unsafe else "safe")]
+    if levels:
+        index = max(range(len(levels)), key=levels.__getitem__)
+        dangerous = dangerous_probability(levels)
+        lines.append(block_row("Risk", RISK_MARKERS[index], LEVELS[index], levels[index]))
+        lines.append(block_row("Dangerous", "🔴" if dangerous >= config.threshold else "🟢",
+                               "yes" if dangerous >= config.threshold else "no", dangerous))
+    else:
+        lines += [block_row("Risk", "⚪", "n/a"), block_row("Dangerous", "⚪", "n/a")]
+    lines.append(block_row("Root", "⚪", "n/a"))
+    lines.append(f"  {'Models':<11}{decision.upper()} · {reason} ({COMBINE_TEXT[config.combine]})")
     for name, row in models.items():
-        state = "no answer" if row.get("failed") else "pass" if row["passed"] else "fail"
-        sign = "<=" if row["p"] <= row["threshold"] else "> "
-        lines.append(f"  {name:<{width}}  risk {row['p']:.3f} {sign} {row['threshold']:.3f}  {state:<9}  {row['ms']:.0f} ms")
-    if len(models) > 1:
-        against = f" {'<=' if mean <= config.threshold else '> '} {config.threshold:.3f}" if config.combine == "mean" else ""
-        lines.append(f"  {'mean':<{width}}  risk {mean:.3f}{against}")
+        if row.get("failed"):
+            lines.append(block_row(name[:10], "⚪", "no answer"))
+        else:
+            lines.append(block_row(name[:10], "🟢" if row["passed"] else "🔴", "pass" if row["passed"] else "FAIL", row["p"]))
     return "\n".join(lines)
 
 

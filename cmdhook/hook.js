@@ -66,7 +66,8 @@ async function decide(cfg, command, cwd) {
     return await ask(cfg, { command, cwd });
   } catch (err) {
     const reason = `backend at http://${cfg.host}:${cfg.port} did not answer (${err.message})`;
-    return { decision: cfg.onError, reason, summary: `cmdhook: ${cfg.onError.toUpperCase()} - ${reason}`, offline: true };
+    const summary = ["Command Gate", "  ⚠ no answer from the backend", `  ${cfg.onError.toUpperCase()} · ${reason}`].join("\n");
+    return { decision: cfg.onError, reason, summary, offline: true };
   }
 }
 

@@ -114,7 +114,22 @@ An encoder trained on a prompt-wrapped command is not served.
 
 ## What you see
 
-For a command that passes, the scores appear as a message in Claude Code. For one that does not, they are the reason in the permission prompt (`ask`) or the reason Claude gets (`deny`).
+The hook shows the same Command Gate block as the Cursor, Claude Code and Codex plugins:
+
+```text
+Command Gate
+  Verdict    🔴 UNSAFE
+  Risk       🟠 high       57%
+  Dangerous  🔴 yes        72%
+  Root       ⚪ n/a
+  Models     ASK · 4 of 4 models above their threshold: rules, ngram, encoder, kev (every model must pass)
+  rules      🔴 FAIL       69%
+  ngram      🔴 FAIL       83%
+  encoder    🔴 FAIL       97%
+  kev        🔴 FAIL       91%
+```
+
+Risk and Dangerous come from the models that have risk levels, as in the plugins; Root reads `n/a`. For a command that passes, the block appears as a message in Claude Code. For one that does not, it is the reason in the permission prompt (`ask`) or the reason Claude gets (`deny`).
 
 Try a command without Claude Code:
 
@@ -122,7 +137,7 @@ Try a command without Claude Code:
 node cmdhook/hook.js check "git push --force origin main"
 ```
 
-It prints the decision and one line per model, with exit code 0 for allow or defer, 1 for ask and 2 for deny.
+It prints the block, with exit code 0 for allow or defer, 1 for ask and 2 for deny.
 
 ## Backend API
 
