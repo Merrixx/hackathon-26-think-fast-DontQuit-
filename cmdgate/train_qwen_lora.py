@@ -89,9 +89,9 @@ def main() -> None:
     parser.add_argument("--r", type=int, default=16)
     parser.add_argument(
         "--device",
-        choices=("auto", "mps", "cpu"),
+        choices=("auto", "cuda", "mps", "cpu"),
         default="auto",
-        help="force cpu while another job owns MPS; auto prefers mps when available",
+        help="auto: cuda if available, else mps, else cpu; use cuda on DGX",
     )
     parser.add_argument(
         "--early-stop",
@@ -112,17 +112,36 @@ def main() -> None:
 
     if args.device == "cpu":
         device = "cpu"
+    elif args.device == "cuda":
+        if not torch.cuda.is_available():
+            raise SystemExit("--device cuda requested but torch.cuda.is_available() is False")
+        device = "cuda"
     elif args.device == "mps":
         device = "mps"
     else:
-        device = "mps" if torch.backends.mps.is_available() else "cpu"
+        # auto
+        if torch.cuda.is_available():
+            device = "cuda"
+        elif torch.backends.mps.is_available():
+            device = "mps"
+        else:
+            device = "cpu"
+
+    use_bf16 = device == "cuda" and hasattr(torch.cuda, "is_bf16_supported") and torch.cuda.is_bf16_supported()
+    use_fp16 = device == "cuda" and not use_bf16
+    if device == "mps":
+        load_dtype = torch.float32
+    elif device == "cuda":
+        load_dtype = torch.bfloat16 if use_bf16 else torch.float16
+    else:
+        load_dtype = torch.float32
 
     tok = AutoTokenizer.from_pretrained(args.base, trust_remote_code=True)
     if tok.pad_token is None:
         tok.pad_token = tok.eos_token
     model = AutoModelForCausalLM.from_pretrained(
         args.base,
-        torch_dtype=torch.float32 if device == "mps" else torch.bfloat16,
+        torch_dtype=load_dtype,
         trust_remote_code=True,
     )
     lora = LoraConfig(
@@ -156,7 +175,7 @@ def main() -> None:
         train_rows = [raw[i] for i in order]
 
     ds = LetterDataset(train_rows, tok, args.max_length)
-    print(f"rows={len(ds)} device={device}")
+    print(f"rows={len(ds)} device={device} bf16={use_bf16} fp16={use_fp16}")
 
     train_args = TrainingArguments(
         output_dir=str(args.out / "checkpoints"),
@@ -175,9 +194,9 @@ def main() -> None:
         save_total_limit=2 if args.early_stop else 1,
         report_to=[],
         remove_unused_columns=False,
-        bf16=False,
-        fp16=False,
-        dataloader_pin_memory=False,
+        bf16=use_bf16,
+        fp16=use_fp16,
+        dataloader_pin_memory=(device == "cuda"),
         use_cpu=(device == "cpu"),
     )
 
@@ -207,7 +226,7 @@ def main() -> None:
     print("merging adapter into base…")
     base = AutoModelForCausalLM.from_pretrained(
         args.base,
-        torch_dtype=torch.float32 if device == "mps" else torch.bfloat16,
+        torch_dtype=load_dtype,
         trust_remote_code=True,
     )
     merged = PeftModel.from_pretrained(base, str(adapter_dir))

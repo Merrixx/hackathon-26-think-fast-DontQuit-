@@ -73,12 +73,14 @@ uv run python cmdgate/train_qwen_lora.py \
 GPU queue (after `scp` above; use a Python env that has `torch` / `transformers` / `peft` — often the Kev venv):
 
 ```bash
+# Prefer --device auto (picks CUDA on DGX). --device cuda also works after the
+# train_qwen_lora.py fix that accepts that choice.
 gpuq submit -t DontQuit -n 1 -- \
   bash -lc 'cd ~/teams/DontQuit/kev && \
     python ../train_qwen_lora.py \
       --data ../cmdrisk_qwen_train.jsonl \
       --out ../runs/cmdrisk-qwen06 \
-      --device cuda --early-stop --val-frac 0.05 --patience 3 --epochs 1'
+      --device auto --early-stop --val-frac 0.05 --patience 3 --epochs 1'
 ```
 
 Submit Qwen **after** the Kev early-stop job finishes if the box is one-GPU /
