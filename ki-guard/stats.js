@@ -6,6 +6,22 @@ const ALLOW = path.join(DIR, 'allow.json');
 const old = e => e.bucket || (e.level === 'block' ? 'blocked' : e.level === 'allow' ? 'safe' : 'likely');
 function readAllow() { try { return JSON.parse(fs.readFileSync(ALLOW, 'utf8')).patterns || []; } catch { return []; } }
 function writeAllow(patterns) { fs.mkdirSync(DIR, { recursive: true }); fs.writeFileSync(ALLOW, JSON.stringify({ patterns }, null, 2)); }
+// Scores written by the Python eval harness (`python -m cmdgate.evaluate`) into the repo's results/ folder.
+const RESULTS = process.env.KI_GUARD_RESULTS || path.join(__dirname, '..', 'results');
+function harness() {
+  let files = [];
+  try { files = fs.readdirSync(RESULTS).filter(f => f.endsWith('.json')).sort(); } catch {}
+  const runs = [];
+  for (const f of files) {
+    try {
+      const r = JSON.parse(fs.readFileSync(path.join(RESULTS, f), 'utf8'));
+      if (typeof r.scorer !== 'string' || typeof r.split !== 'string' || !r.metrics || typeof r.metrics.accuracy !== 'number') continue;
+      runs.push({ scorer: r.scorer, split: r.split, source: r.source || 'in-process', commands: r.commands ?? null, families: r.families ?? null,
+        failed: r.failed ?? 0, ms_per_command: r.ms_per_command ?? null, metrics: r.metrics, ranges: r.ranges || {}, scored_at: fs.statSync(path.join(RESULTS, f)).mtime.toISOString() });
+    } catch {}
+  }
+  return runs;
+}
 function stats() {
   let lines = [];
   try { lines = fs.readFileSync(path.join(DIR, 'log.jsonl'), 'utf8').split('\n').filter(Boolean); } catch {}
@@ -19,9 +35,6 @@ function stats() {
     const d = (e.t || '').slice(0, 10); (days[d] ||= { blocked: 0, likely: 0, unsure: 0, safe: 0, yours: 0 })[e.bucket]++;
     for (const h of e.hits) rules[h] = (rules[h] || 0) + 1;
   }
-  let model = null; try { model = JSON.parse(fs.readFileSync(path.join(__dirname, 'model/results.json'), 'utf8')); } catch {}
-  let compare = null; try { compare = JSON.parse(fs.readFileSync(path.join(__dirname, 'model/compare.json'), 'utf8')); } catch {}
-  return { compare, total: ev.length, buckets, agents, days, rules, recent: ev.slice(-60).reverse(), allow: readAllow(),
-    model: model && { holdout: model.holdout['KI-Guard model (shipped)'], rules: model.holdout['Rule guard (regex)'], queue: model.queue_holdout } };
+  return { harness: harness(), total: ev.length, buckets, agents, days, rules, recent: ev.slice(-60).reverse(), allow: readAllow() };
 }
-module.exports = { stats, readAllow, writeAllow };
+module.exports = { stats, harness, readAllow, writeAllow };

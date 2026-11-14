@@ -157,6 +157,6 @@ System message (bridge `SYSTEM`):
 
 `python -m cmdgate.build_suite` writes runner suites (`data/cmdrisk_{train,validation,test}.jsonl`)
 with `request` + `labels.risky`. Score validation (and only later, after the
-design is frozen, test) with `thinkfast.run_eval` or `cmdgate.score_api` against
+design is frozen, test) with `thinkfast.run_eval` or `cmdgate.evaluate --endpoint <url> --name <name>` against
 a live endpoint. Do not put test-split numbers in `REPORT.md` until the design
 is frozen.

@@ -74,14 +74,20 @@ The problem we locked in: should a person approve this shell command before an A
 | `cmdgate/dataset.py` | Loads CLI Command Risk as one row per distinct command, with its template family |
 | `cmdgate/build_suite.py` | Writes the splits as suites for the evaluation runner |
 | `cmdgate/rules.py`, `cmdgate/ngram.py` | The two baselines: a regex denylist, and character n-grams into a logistic regression |
-| `cmdgate/engine.py` | Serves any scorer behind `POST /v1/systemone` |
-| `cmdgate/evaluate.py` | Scores a scorer on a split, with ranges from resampling whole template families |
+| `cmdgate/encoder.py` | A fine-tuned text encoder (ModernBERT-base by default) with a five-level head, temperature-scaled on validation |
+| `cmdgate/kev_data.py` | Writes the train, calibration and development partitions a Kev fine-tune reads into `data/kev/cmdrisk/` |
+| `cmdgate/scorers.py` | The models by name (`prior`, `rules`, `ngram`, `encoder`, any decision API endpoint such as Kev, and `vote`, the mean of its members). The harness and the engine both load them from here |
+| `cmdgate/engine.py` | The model backend: serves the models behind `POST /v1/systemone` (decision API) and `POST /v1/check` (verdict for the KI-Guard hook and dashboard, using each model's cut-offs from the harness) |
+| [cmdhook/](cmdhook/README.md) | The Claude Code hook app: a setup and a start command, a backend that scores each command with the models and thresholds set in `cmdhook/.env`, and the thin `hook.js` that Claude Code calls |
+| `ki-guard/` | The hook for coding agents and the dashboard. It holds no model: it calls the backend. See [ki-guard/README.md](ki-guard/README.md) |
+| `cmdgate/evaluate.py` | The eval harness: scores a model in process (`--scorer`) or any decision API engine (`--endpoint`) on a split, with ranges from resampling whole template families. Writes `results/<name>_<split>.json` |
+| [vscode-extension/](vscode-extension/README.md) | VS Code add-on: a second opinion on the commands an agent asks permission for, answered by the local app. Demo with fake data: [DEMO.md](vscode-extension/DEMO.md) |
 | [cmdgate-claude-plugin/](cmdgate-claude-plugin/README.md) | Claude Code plugin: a second opinion from the local app as a line under every shell-command permission prompt, in any terminal or IDE. Install: `/plugin install cmdgate --marketplace Merrixx/hackathon-26-think-fast-DontQuit-` |
 | [cmdgate-cursor-plugin/](cmdgate-cursor-plugin/README.md) | Cursor plugin: the same second opinion via a `beforeShellExecution` hook (advisory only; never denies). Marketplace: [`.cursor-plugin/marketplace.json`](.cursor-plugin/marketplace.json) |
 | [cmdgate-codex-plugin/](cmdgate-codex-plugin/README.md) | Codex CLI plugin: the same styled evaluation via a native `PreToolUse` advisory, without changing permissions. Local-file setup and marketplace installation: [walkthrough](cmdgate-codex-plugin/README.md#install-and-try-it). Marketplace: [`.agents/plugins/marketplace.json`](.agents/plugins/marketplace.json) |
 | [vscode-extension/](vscode-extension/README.md) | Optional VS Code / Cursor add-on: shows the plugin's answers as a styled card. Demo with fake data: [DEMO.md](vscode-extension/DEMO.md) |
 
-Downloading and reading the datasets needs two extra libraries, kept in the optional `ml` group:
+Downloading the datasets and training the encoder need extra libraries (Hugging Face Hub, PyArrow, PyTorch, Transformers), kept in the optional `ml` group:
 
 ```bash
 uv sync --extra ml
@@ -89,8 +95,67 @@ uv run --extra ml python -m cmdgate.fetch_data
 uv run --extra ml python -m cmdgate.build_suite
 uv run --extra ml python -m cmdgate.ngram
 uv run --extra ml python -m cmdgate.evaluate --scorer ngram --split validation
+uv run --extra ml python -m cmdgate.encoder                   # fine-tunes the encoder into models/encoder/ (about 30 min on Apple Silicon)
+uv run --extra ml python -m cmdgate.evaluate --scorer encoder --split validation
+uv run --extra ml python -m cmdgate.evaluate --scorer vote --members rules,ngram,encoder --split validation
 uv run --extra ml python -m cmdgate.engine --scorer ngram     # then score it with thinkfast.run_eval
+
+# any engine behind the decision API (Kev, the bridge) gets the same metrics:
+uv run --extra ml python -m cmdgate.evaluate --endpoint http://127.0.0.1:8011/v1/systemone --name kev --split validation
 ```
+
+### Models: fetch instead of training
+
+The trained weights are not in git. They sit in one private Hugging Face model repo, pinned by revision in `cmdgate/models.json`; log in once with `uv run --extra ml hf auth login` (a token with access to that repo).
+
+```bash
+uv run --extra ml python -m cmdgate.fetch_models          # Kev adapter, both n-gram models, and Kev's base model into the local cache (about 1.8 GB)
+uv run --extra ml python -m cmdgate.fetch_models --all    # also the fine-tuned encoders (about 5.8 GB more)
+uv run --extra ml python -m cmdgate.policy --check        # the downloaded weights are the ones the cut-offs were measured on
+git clone https://github.com/jaredpalmer/kev.git ../kev && git -C ../kev checkout 2074cc4 && (cd ../kev && uv sync --extra serve)
+```
+
+Each model's allow and ask cut-offs are frozen in `cmdgate/policy.json`, so nothing has to be measured after a fetch. After retraining a model, run `cmdgate.evaluate` for it and then `uv run --extra ml python -m cmdgate.policy` to freeze the new cut-off; `--publish <account>/<repo>` on `cmdgate.fetch_models` uploads new weights and repins the revision.
+
+Start Kev and the backend with Kev as the default model. With the base model cached, both run with the network off:
+
+```bash
+(cd ../kev && HF_HUB_OFFLINE=1 uv run --extra serve python -m kev.serve --run "$OLDPWD/runs/cmdrisk-08b-cap16-e1/checkpoint" --port 8011)
+uv run --extra ml python -m cmdgate.engine --endpoint kev=http://127.0.0.1:8011/v1/systemone --default kev
+```
+
+`--scorers` picks the in-process models by name: `rules`, `ngram`, `ngram-plus`, `encoder`, the fine-tuned encoders `enc-mbl-cap8`, `enc-qwenc-cap8`, `enc-qwenc-cap8-s1`, `enc-qwenc-cap8-s2`, `enc-qwen-cap8`, and `enc-ens-qwen4`, the mean of the four Qwen ones. Without it the backend loads the light ones (rules, both n-gram models, the encoder); the large encoders take 2 to 3 GB of memory each. `POST /v1/check` with `"all": true` returns every loaded model's probability and its own verdict.
+
+### Hook and dashboard
+
+```bash
+uv run --extra ml python -m cmdgate.engine      # model backend on port 8009: every model found on disk, plus their vote
+cd ki-guard && npm start                        # dashboard on http://127.0.0.1:8049/
+```
+
+[KI-Guard](ki-guard/README.md) is the frontend: a hook for coding agents and a dashboard. It has no model of its own. For every command it calls the backend's `POST /v1/check`, and the backend answers with the models listed above. A model may allow a command on its own only inside the cut-off `cmdgate.evaluate` measured for it on validation (`results/<model>_validation.json`); a model without that file asks a person every time, and so does the `vote` unless it was evaluated with the same members the backend serves. The dashboard's "Eval harness" card shows every `results/<name>_<split>.json` side by side.
+
+### Fine-tuning Kev on a cloud GPU
+
+Kev trains on an NVIDIA GPU, so the fine-tune runs on [Modal](https://modal.com) with the app Kev ships (`skills/kev-finetune/scripts/kev_modal.py`), and the weights come back to this machine to be served offline. Clone [Kev](https://github.com/jaredpalmer/kev) next to this repo, sign in to Modal once with `uvx modal setup`, then from this repo's root:
+
+```bash
+uv run --extra ml python -m cmdgate.kev_data                  # data/kev/cmdrisk/{train,calibration,development}.jsonl
+KEV_MODAL=../kev/skills/kev-finetune/scripts/kev_modal.py
+uvx modal run $KEV_MODAL::validate --data data/kev/cmdrisk --init-from jaredpalmer/kev-0.8b      # CPU only: do the records fit?
+uv run --extra ml python -m cmdgate.kev_variants --cap 16                                        # at most 16 commands per family: data/kev/cmdrisk-cap16/
+uvx modal run --detach $KEV_MODAL::train --data data/kev/cmdrisk-cap16 --name cmdrisk-08b-cap16-e1 --init-from jaredpalmer/kev-0.8b \
+    --epochs 1 --lr 5e-5 --replay 500 --no-baseline --regression 0 --gpu L40S --timeout 5400
+uvx modal run $KEV_MODAL::pull --name cmdrisk-08b-cap16-e1 --checkpoint                          # weights into runs/cmdrisk-08b-cap16-e1/
+(cd ../kev && uv run --extra serve python -m kev.serve --run "$OLDPWD/runs/cmdrisk-08b-cap16-e1/checkpoint" --port 8011)
+uv run --extra ml python -m cmdgate.evaluate --endpoint http://127.0.0.1:8011/v1/systemone --name kev --split validation
+```
+
+`train` uploads the three partitions to a Modal volume, fine-tunes from the released checkpoint, fits the temperature on the calibration partition (train families held out whole) and scores the validation split next to the untouched checkpoint. Run names are immutable: a new attempt needs a new `--name`. `uvx modal run $KEV_MODAL::teardown --everything --yes` removes the volumes afterwards. Keep the launching machine online until the run ends: Modal cancels the training call if the client disconnects, even with `--detach`.
+
+The capped file is the recipe we ship; every run, the hard set (`cmdgate/hardset.py`), the other-source tests (`cmdgate/crosseval.py`), the encoder sweep (`cmdgate/modal_encoder.py`), the Adaption comparison (`cmdgate/adaption_data.py`) and plain model averages (`cmdgate/blend.py`) are written up in [docs/training-log.md](docs/training-log.md), with one line per scored run in `docs/cmdgate-experiments.jsonl`.
+
+To add Kev: serve it on another port, evaluate it with `--endpoint ... --name kev`, then start the backend with `--endpoint kev=http://127.0.0.1:8011/v1/systemone` and re-evaluate the vote with `--member-endpoint kev=...`.
 
 Tune on the validation split only. The test split is scored once, at the end. `cmdgate` is not yet connected to the `tagger` pipeline or `dataset.toml`.
 
