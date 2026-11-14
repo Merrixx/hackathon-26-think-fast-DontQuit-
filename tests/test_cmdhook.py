@@ -171,7 +171,7 @@ class BackendTest(unittest.TestCase):
         settings = {"CMDHOOK_PORT": str(self.port), "CMDHOOK_HOST": "127.0.0.1", "CMDHOOK_TIMEOUT_MS": "5000",
                     "CMDHOOK_ON_ERROR": "ask", "CMDHOOK_QUIET": "0", **env}
         return subprocess.run(["node", str(HOOK), *args], input=stdin, capture_output=True, text=True, timeout=30,
-                              env={"PATH": os.environ["PATH"], **settings})
+                              env={**{k: os.environ[k] for k in ("PATH", "SYSTEMROOT") if k in os.environ}, **settings})  # Windows: node needs SYSTEMROOT for sockets
 
     def test_hook_endpoint_returns_the_breakdown(self):
         base = self.serve(Config(threshold=0.5), low=0.02, high=0.96)

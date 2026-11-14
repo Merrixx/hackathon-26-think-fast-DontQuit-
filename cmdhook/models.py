@@ -58,7 +58,7 @@ class Model:
                  for lib in libraries if importlib.util.find_spec(lib) is None]
         hint = f" ({remedy})" if remedy else ""
         if self.kind in ("fitted", "ngram", "ngram-plus") and not self.path.is_file():
-            found.append(f"{self.path} is missing{hint}")
+            found.append(f"{self.path.as_posix()} is missing{hint}")
         elif self.kind == "encoder":
             found.extend(_encoder_problems(self.path, hint))
         elif self.kind == "kev":
@@ -68,24 +68,24 @@ class Model:
 
 def _encoder_problems(path: Path, hint: str) -> list[str]:
     if not path.is_dir():
-        return [f"{path}/ is missing{hint}"]
-    found = [f"{path / name} is missing" for name in ENCODER_FILES if not (path / name).is_file()]
+        return [f"{path.as_posix()}/ is missing{hint}"]
+    found = [f"{(path / name).as_posix()} is missing" for name in ENCODER_FILES if not (path / name).is_file()]
     tokenizer = path / "tokenizer.json"
     if tokenizer.is_file():
         try:
             json.loads(tokenizer.read_bytes())
         except ValueError:  # a download that was cut off leaves a file that does not parse
-            found.append(f"{tokenizer} is damaged, not valid JSON: fetch the model folder again")
+            found.append(f"{tokenizer.as_posix()} is damaged, not valid JSON: fetch the model folder again")
     meta = path / "cmdgate.json"
     if meta.is_file():
         try:
             saved = json.loads(meta.read_text())
         except ValueError:
-            return [*found, f"{meta} is not valid JSON"]
+            return [*found, f"{meta.as_posix()} is not valid JSON"]
         if "temperature" not in saved:
-            found.append(f"{meta} has no temperature")
+            found.append(f"{meta.as_posix()} has no temperature")
         if saved.get("prompt"):
-            found.append(f"{path} was trained on a prompt-wrapped command, which this backend does not serve")
+            found.append(f"{path.as_posix()} was trained on a prompt-wrapped command, which this backend does not serve")
     return found
 
 
@@ -140,7 +140,7 @@ def on_disk() -> list[str]:
 
 def kev_checkpoints(runs: Path = Path("runs")) -> list[str]:
     """Kev checkpoints on disk, as values for `CMDHOOK_KEV_RUN`."""
-    return sorted(str(p) for p in runs.glob("*/checkpoint") if p.is_dir())
+    return sorted(p.as_posix() for p in runs.glob("*/checkpoint") if p.is_dir())
 
 
 def load(model: Model, train: list | None = None) -> Any:
