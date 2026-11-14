@@ -189,4 +189,4 @@ ${body}
 </body></html>`;
 }
 
-module.exports = { renderPanel, esc };
+module.exports = { renderPanel, esc, headline };
