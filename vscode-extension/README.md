@@ -1,8 +1,10 @@
 # Command Gate for VS Code
 
-A second opinion on the shell commands an AI agent asks you to approve. When a
-permission prompt appears, it shows what your locally running Command Gate app
-says about that command:
+An optional, richer display for [Command Gate](../cmdgate-claude-plugin/README.md): the
+second opinion on the shell commands an AI agent asks you to approve. The
+Claude Code plugin already shows a one-line second opinion under every
+permission prompt, in any terminal or IDE. With this add-on installed, VS Code
+also opens a styled card for each prompt:
 
 | Field | Question ID it reads | Shown as |
 |---|---|---|
@@ -20,12 +22,15 @@ and it runs no model itself: every answer comes from the app.
 
 ## Where it checks commands
 
-Commands that already ran in a terminal are not checked: only what an agent
-asks permission for, or what you check by hand.
+Commands that already ran in a terminal are not checked: only pending commands
+forwarded by an agent plugin, or what you check by hand. Cursor and Codex hooks
+can forward commands that would not otherwise need approval.
 
 | Source | When | How |
 |---|---|---|
-| **Claude Code permission prompts** | Exactly when Claude Code asks you to approve a shell command | A `PermissionRequest` hook forwards the command. The prompt is unchanged; the second opinion pops up next to it |
+| **Claude Code permission prompts** | Exactly when Claude Code asks you to approve a shell command | The [Command Gate Claude Code plugin](../cmdgate-claude-plugin/README.md) asks the app and forwards the command and its answer here. The prompt is unchanged |
+| **Cursor Agent shell commands** | When Cursor Agent is about to run a shell command | The [Command Gate Cursor plugin](../cmdgate-cursor-plugin/README.md) asks the app, attaches a message, and forwards here |
+| **Codex CLI shell commands** | Before a matching shell command runs | The [Command Gate Codex plugin](../cmdgate-codex-plugin/README.md) asks the app, emits a CLI advisory, and optionally forwards here |
 | **By hand** | Any time | *Command Gate: Check command…*, or select text → right-click → *Check selection* |
 
 Results open as a **second-opinion card** beside the editor, without taking
@@ -41,68 +46,180 @@ the plain toast is off by default (`cmdgate.notifyOnPrompt`).
 - The Command Gate app running locally and serving the decision API
   (`POST /v1/systemone`, see [../docs/decision-api.md](../docs/decision-api.md)). The default endpoint is
   `http://127.0.0.1:8009/v1/systemone`.
-- Node.js on `PATH`, only for the Claude Code hook.
+- For Claude Code prompts: the [Command Gate Claude Code plugin](../cmdgate-claude-plugin/README.md).
+- For Cursor Agent shell commands: the [Command Gate Cursor plugin](../cmdgate-cursor-plugin/README.md).
+- For Codex CLI shell commands: the [Command Gate Codex plugin](../cmdgate-codex-plugin/README.md) with IDE forwarding enabled.
 
 No npm packages are needed; the add-on uses only Node and VS Code built-ins.
 
-## Try it
+## Install and try it
 
-For a full walkthrough with a fake backend (no model needed), including a
-Claude Code permission prompt, see [DEMO.md](DEMO.md). Short version:
+These are **PowerShell** commands, run from the **repository root**. Choose a
+backend in step 1, then an installed or local add-on in step 2. That gives all
+four combinations: demo/installed, demo/local, real/installed, and real/local.
+The add-on is an editor extension, not an agent CLI: `code` below launches VS
+Code. For the actual agent CLI commands, see the
+[Claude plugin walkthrough](../cmdgate-claude-plugin/README.md#install-and-try-it)
+or [Cursor plugin walkthrough](../cmdgate-cursor-plugin/README.md#install-and-try-it).
+The older end-to-end demo is also in [DEMO.md](DEMO.md).
 
-1. Start the app on port 8009. Without the real backend, use the fake one from
-   the repo root: `node vscode-extension/demo/mock-app.js` (made-up answers, demo only).
-2. Create `~/cmdgate-demo` once, open the repo in VS Code and press **F5**
-   (*Run Command Gate add-on*). A second VS Code window starts with the add-on loaded.
-3. In that window, run **Command Gate: Check command…** and enter `sudo rm -rf /var/lib/postgresql`.
+### 1A. Demo backend: start the test server in the background
 
-To use it in your normal VS Code, copy or symlink this folder into
-`~/.vscode/extensions/cmdgate-vscode`, or package it with
-[`vsce package`](https://code.visualstudio.com/api/working-with-extensions/publishing-extension)
-and install the `.vsix`.
+Use port **8010** to keep the demo separate from the default real-backend port.
+Do not start a second mock server if one is already listening there.
 
-## Claude Code permission prompts
+```powershell
+$mockJob = Start-Job -ArgumentList (Get-Location).Path -ScriptBlock {
+    param($repo)
+    Set-Location $repo
+    node ./vscode-extension/demo/mock-app.js --port 8010
+}
+$endpoint = 'http://127.0.0.1:8010/v1/systemone'
 
-Run **Command Gate: Install Claude Code hook** and pick where it goes:
+# Read the startup banner; repeat this if the job is still starting.
+Receive-Job $mockJob -Keep
+# Once the banner appears, this should return ok=True and demo=True.
+Invoke-RestMethod 'http://127.0.0.1:8010/health'
+```
 
-- **This project only:** `.claude/settings.local.json` in an open folder, or in
-  any folder you pick with *Another project folder…* (the folder you start
-  Claude Code in). The file is personal and not committed.
-- **This user:** `~/.claude/settings.json`, for every project.
+Leave this PowerShell window open: it owns the background job. The mock returns
+**made-up answers**, not model results. Continue with step 2 in this window.
 
-The first install keeps a backup of the original file (`*.cmdgate-backup`).
-Removing the hook deletes only the add-on's own entry.
+### 1B. Real backend: select its IP and port
 
-It copies the hook script to `~/.cmdgate/cmdgate-hook.js` and adds:
+Instead of step 1A, connect to your already running real decision API:
+
+```powershell
+$backendIp = Read-Host 'Real backend IP or hostname (as reachable from this machine)'
+$backendPort = Read-Host 'Real backend port'
+$endpoint = "http://${backendIp}:$backendPort/v1/systemone"
+$endpoint
+Test-NetConnection -ComputerName $backendIp -Port ([int]$backendPort)
+```
+
+Use `https://` in `$endpoint` if your backend requires TLS. TCP success checks
+connectivity, not the API contract. The backend must implement
+[the decision API](../docs/decision-api.md); its startup command depends on the
+backend you run. Do not start the mock for this route. A non-loopback endpoint
+receives command text over the network: only use an authorized, trusted service.
+
+### 2A. Install the add-on, then launch the editor
+
+If you already have the `vsce` packaging tool installed:
+
+```powershell
+Push-Location ./vscode-extension
+vsce package --out cmdgate-vscode.vsix
+Pop-Location
+# Run these only if packaging succeeded:
+code --install-extension ./vscode-extension/cmdgate-vscode.vsix
+code --new-window .
+```
+
+For Cursor's editor, use `cursor --install-extension` and `cursor --new-window`
+instead of `code`. See the
+[packaging documentation](https://code.visualstudio.com/api/working-with-extensions/publishing-extension)
+if `vsce` is not installed; the local-file route does not need it. Do not commit
+the generated `.vsix`. Alternatively, use **Extensions → … → Install from VSIX…**.
+Reload an already open editor after installation, then continue with step 3.
+
+### 2B. Launch with local add-on files, without installation
+
+Instead of step 2A, run:
+
+```powershell
+$extensionDir = (Resolve-Path ./vscode-extension).Path
+code --new-window --disable-extensions --extensionDevelopmentPath $extensionDir .
+```
+
+This opens an Extension Development Host with the add-on loaded from the
+checkout; other installed extensions are disabled for isolation. No package
+installation or build is needed. Continue with step 3 **in the development
+window**. Restart that window after source edits.
+
+The checked-in **Run Command Gate add-on** F5 launch is an alternative: it opens
+`~/cmdgate-demo` rather than the repo, so create that folder first if using F5.
+Do not load an installed and development copy in the same window.
+
+### 3. Configure the selected backend in the editor
+
+Print the exact setting for the endpoint chosen in step 1:
+
+```powershell
+@{ 'cmdgate.endpoint' = $endpoint } | ConvertTo-Json
+```
+
+In the editor window being tested, open the Command Palette and run
+**Preferences: Open Workspace Settings (JSON)**. Merge the printed property
+into the existing object without overwriting other settings. For the demo,
+it is:
 
 ```json
 {
-  "hooks": {
-    "PermissionRequest": [
-      { "matcher": "Bash|PowerShell",
-        "hooks": [{ "type": "command", "command": "node \"<home>/.cmdgate/cmdgate-hook.js\"", "timeout": 5 }] }
-    ]
-  }
+  "cmdgate.endpoint": "http://127.0.0.1:8010/v1/systemone"
 }
 ```
 
-Restart running Claude Code sessions afterwards. Permission prompts only appear
-in Claude Code's default mode: in auto mode or bypass mode there is no prompt,
-so there is nothing to give a second opinion on. **Command Gate: Remove Claude Code hook** takes it out again.
+For the real route, use the IP and port you selected, not the demo value.
+Set `cmdgate.model` too if the backend needs a particular model identifier.
+There is no add-on endpoint CLI flag: **the add-on reads editor settings, not
+`CMDGATE_ENDPOINT` environment variables**. Avoid committing local backend
+addresses in workspace settings; restore the previous value after testing.
 
-How it works:
+### 4. Test it and inspect the result
 
-1. Claude Code is about to show a permission prompt and runs the hook with the
-   tool call on stdin.
-2. The hook finds the VS Code window whose workspace contains the command's
-   working directory. Each window writes its port and a random token to
-   `~/.cmdgate/windows/`.
-3. The hook sends that window the command and the agent's description.
-4. The window asks the app and shows the answer.
+1. Open the Command Palette and run **Command Gate: Check command…**.
+2. Enter `git status`. A second-opinion card should open beside the editor.
+   With the demo backend it should be safe, risk `safe`, dangerous `no`, root
+   `no`. `Receive-Job $mockJob -Keep` should show the request in the server log.
+3. Run **Check command…** again and enter `git push --force origin main`.
+   With the demo it should show an unsafe verdict, risk `high`, dangerous `yes`,
+   root `no`. Both manual checks **only score text; they do not run commands**.
+   Do not paste the force-push into a terminal.
+4. With the real backend, the card should reflect the actual API reply instead
+   of fixed demo expectations. Missing answers show `n/a`; an unreachable server
+   produces an offline/no-second-opinion card, not a fabricated verdict.
+5. To test agent forwarding, open a terminal in this editor window and follow
+   the installed or local CLI route in the
+   [Claude README](../cmdgate-claude-plugin/README.md#install-and-try-it) or
+   [Cursor README](../cmdgate-cursor-plugin/README.md#install-and-try-it).
+   Configure **that plugin's endpoint separately** to the same backend and
+   enable IDE forwarding. Its checked shell command should appear in both the
+   agent's permission prompt and this add-on's card. The add-on does not score
+   forwarded events a second time.
 
-The hook prints nothing and always exits 0, so Claude Code's prompt and your
-choice there are unaffected. If no window or app answers, nothing happens. The
-listener binds to `127.0.0.1` only and refuses requests without the token.
+Use **Command Gate: Show second opinions** to reopen the card, or inspect
+**Output → Command Gate** if it is not visible. No IDE card is expected when
+only the CLI plugin is loaded and this add-on is not running.
+
+### 5. Clean up
+
+Close the development window if using local files and restore any editor
+settings changed for the test. Only if you started the demo job in step 1A:
+
+```powershell
+Stop-Job $mockJob
+Remove-Job $mockJob
+```
+
+Do not stop the real backend as part of this test.
+
+## Claude Code / Cursor permission prompts
+
+Install the [Command Gate Claude Code plugin](../cmdgate-claude-plugin/README.md) and/or
+the [Command Gate Cursor plugin](../cmdgate-cursor-plugin/README.md). They do the
+work at the prompt: ask the app, show a second-opinion line (Claude) or hook
+message (Cursor), and forward the command and the app's answer to this add-on,
+which shows the card. The add-on doesn't ask the app a second time.
+
+How the plugin finds VS Code: each VS Code window listens on `127.0.0.1` on a
+random port and writes that port and a random token to
+`~/.cmdgate/windows/<id>.json`. The plugin posts to every window listed there;
+requests without the token are refused. Any other IDE add-on can receive the
+same events by doing the same (see the plugin README's protocol section).
+
+Permission prompts only appear in Claude Code's default mode: in auto mode or
+bypass mode there is no prompt, so there is nothing to give a second opinion on.
 
 ## Settings
 
@@ -129,7 +246,8 @@ The add-on sends one request per command:
 
 It reads `answers.<id>.noul` for yes/no questions and
 `answers.risk_level.probabilities` (`"0"`–`"4"`) for the level. A missing
-answer shows as **n/a**; nothing is guessed.
+answer shows as **n/a**; nothing is guessed. The Claude Code plugin sends the
+same request.
 
 **Known gap in the current baseline engine** (`cmdgate/engine.py`): it gives
 every yes/no question the same "risky" probability. That makes *dangerous*,
@@ -139,7 +257,9 @@ Risk has a `requires_root` label to train on) for that field to mean anything.
 
 ## Tests
 
-```bash
+Run against the local files, starting at the repo root (no add-on installation needed):
+
+```sh
 cd vscode-extension
 node --test test/
 ```
@@ -150,5 +270,5 @@ The tests cover:
 - the n/a handling;
 - the HTTP client against a fake app;
 - HTML escaping in the panel;
-- the hook end to end: it forwards to the right window and prints no decision;
+- the listener taking an event in the plugin's format, answer included;
 - the listener refusing requests without the token.

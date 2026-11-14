@@ -36,16 +36,6 @@
         "command": "cmdgate.showPanel",
         "title": "Show second opinions",
         "category": "Command Gate"
-      },
-      {
-        "command": "cmdgate.installClaudeHook",
-        "title": "Install Claude Code hook",
-        "category": "Command Gate"
-      },
-      {
-        "command": "cmdgate.removeClaudeHook",
-        "title": "Remove Claude Code hook",
-        "category": "Command Gate"
       }
     ],
     "menus": {
