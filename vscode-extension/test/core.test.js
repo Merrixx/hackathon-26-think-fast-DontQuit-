@@ -137,3 +137,36 @@ test("listener refuses requests without the window token", async () => {
     server.close();
   }
 });
+
+test("chat card feed: webview origins only, answers once the check lands", async () => {
+  const chatcard = require("../src/chatcard");
+  const hist = [];
+  const { server, push, port } = await chatcard.startCardServer({ port: 0, getHistory: () => hist, waitMs: 2000 });
+  const get = (cmd, origin) => new Promise((resolve, reject) => {
+    const headers = origin ? { Origin: origin } : {};
+    http.get({ host: "127.0.0.1", port, path: `/card?cmd=${encodeURIComponent(cmd)}`, headers }, (res) => {
+      let data = "";
+      res.on("data", (c) => (data += c));
+      res.on("end", () => resolve({ status: res.statusCode, body: data, allow: res.headers["access-control-allow-origin"] }));
+    }).on("error", reject);
+  });
+  try {
+    assert.strictEqual((await get("ls", "https://evil.example")).status, 403);
+    assert.strictEqual((await get("ls")).status, 403);
+    const origin = "vscode-webview://abc123";
+    const pending = get("sudo rm -rf /var", origin);
+    const entry = { command: "sudo rm -rf /var", at: new Date(), ms: 3, result: core.parseAnswers(ANSWER), severity: "error" };
+    setTimeout(() => { hist.unshift(entry); push(entry); }, 50);
+    const res = await pending;
+    assert.strictEqual(res.status, 200);
+    assert.strictEqual(res.allow, origin);
+    const card = JSON.parse(res.body);
+    assert.strictEqual(card.tone, "stop");
+    assert.strictEqual(card.main, 95);
+    assert.strictEqual(card.level, "critical");
+    assert.deepStrictEqual(card.facts.map((f) => f.label), ["Dangerous", "Needs root"]);
+    assert.strictEqual(JSON.parse((await get(" sudo rm -rf /var ", origin)).body).word, "Stop");
+  } finally {
+    server.close();
+  }
+});

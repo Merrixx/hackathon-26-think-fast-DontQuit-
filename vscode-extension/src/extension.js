@@ -18,6 +18,7 @@ const core = require("./core");
 const { postJson } = require("./client");
 const bridge = require("./bridge");
 const { renderPanel } = require("./panel");
+const chatcard = require("./chatcard");
 
 const HISTORY_MAX = 50;
 const HOOK_MARK = "cmdgate-hook.js";
@@ -26,6 +27,7 @@ let history = [];
 let panel = null;
 let statusItem = null;
 let output = null;
+let cardFeed = null;
 
 function settings() {
   const c = vscode.workspace.getConfiguration("cmdgate");
@@ -60,6 +62,7 @@ async function check(command, meta = {}) {
   history = history.slice(0, HISTORY_MAX);
   updateStatus(entry);
   refreshPanel();
+  if (cardFeed) cardFeed.push(entry);
   output.appendLine(`[${entry.at.toISOString()}] ${meta.source || "manual"}: ${command}`);
   output.appendLine(`    ${entry.error ? `error: ${entry.error}` : `${core.summaryLine(entry.result)} (${entry.ms} ms)`}`);
   return entry;
@@ -82,7 +85,7 @@ function updateStatus(entry) {
 // VS Code toast (which extensions cannot style) is optional on top.
 function present(entry, mode) {
   if (settings().showCard) showPanel();
-  else if (mode === "off") mode = "always"; // with the card off, the toast is the only way to see the result
+  else if (mode === "off" && !cardFeed) mode = "always"; // with no card anywhere, the toast is the only way to see the result
   notify(entry, mode);
 }
 
@@ -264,6 +267,18 @@ async function activate(context) {
     output.appendLine(`listening for Claude Code permission prompts on 127.0.0.1:${port}`);
   } catch (err) {
     output.appendLine(`could not start the hook listener: ${err.message}`);
+  }
+
+  // Opt-in feed for a chat webview that draws the card inside the chat (see src/chatcard.js).
+  const cardPort = vscode.workspace.getConfiguration("cmdgate").get("chatCardPort");
+  if (cardPort > 0) {
+    try {
+      cardFeed = await chatcard.startCardServer({ port: cardPort, getHistory: () => history });
+      context.subscriptions.push({ dispose: () => cardFeed.server.close() });
+      output.appendLine(`chat card feed on 127.0.0.1:${cardFeed.port}`);
+    } catch (err) {
+      output.appendLine(`could not start the chat card feed: ${err.message}`);
+    }
   }
 }
 
