@@ -1,8 +1,10 @@
 # Command Gate for VS Code
 
-A second opinion on the shell commands an AI agent asks you to approve. When a
-permission prompt appears, it shows what your locally running Command Gate app
-says about that command:
+An optional, richer display for [Command Gate](../cmdgate-plugin/README.md): the
+second opinion on the shell commands an AI agent asks you to approve. The
+Claude Code plugin already shows a one-line second opinion under every
+permission prompt, in any terminal or IDE. With this add-on installed, VS Code
+also opens a styled card for each prompt:
 
 | Field | Question ID it reads | Shown as |
 |---|---|---|
@@ -25,7 +27,7 @@ asks permission for, or what you check by hand.
 
 | Source | When | How |
 |---|---|---|
-| **Claude Code permission prompts** | Exactly when Claude Code asks you to approve a shell command | A `PermissionRequest` hook forwards the command. The prompt is unchanged; the second opinion pops up next to it |
+| **Claude Code permission prompts** | Exactly when Claude Code asks you to approve a shell command | The [Command Gate Claude Code plugin](../cmdgate-plugin/README.md) asks the app and forwards the command and its answer here. The prompt is unchanged |
 | **By hand** | Any time | *Command Gate: Check command…*, or select text → right-click → *Check selection* |
 
 Results open as a **second-opinion card** beside the editor, without taking
@@ -41,7 +43,7 @@ the plain toast is off by default (`cmdgate.notifyOnPrompt`).
 - The Command Gate app running locally and serving the decision API
   (`POST /v1/systemone`, see [../docs/decision-api.md](../docs/decision-api.md)). The default endpoint is
   `http://127.0.0.1:8009/v1/systemone`.
-- Node.js on `PATH`, only for the Claude Code hook.
+- For Claude Code prompts: the [Command Gate Claude Code plugin](../cmdgate-plugin/README.md).
 
 No npm packages are needed; the add-on uses only Node and VS Code built-ins.
 
@@ -63,46 +65,20 @@ and install the `.vsix`.
 
 ## Claude Code permission prompts
 
-Run **Command Gate: Install Claude Code hook** and pick where it goes:
+Install the [Command Gate Claude Code plugin](../cmdgate-plugin/README.md). It
+does the work at the prompt: it asks the app, shows a line under Claude Code's
+permission dialog, and forwards the command, the agent's description and the
+app's answer to this add-on, which shows the card. The add-on doesn't ask the
+app a second time.
 
-- **This project only:** `.claude/settings.local.json` in an open folder, or in
-  any folder you pick with *Another project folder…* (the folder you start
-  Claude Code in). The file is personal and not committed.
-- **This user:** `~/.claude/settings.json`, for every project.
+How the plugin finds VS Code: each VS Code window listens on `127.0.0.1` on a
+random port and writes that port and a random token to
+`~/.cmdgate/windows/<id>.json`. The plugin posts to every window listed there;
+requests without the token are refused. Any other IDE add-on can receive the
+same events by doing the same (see the plugin README's protocol section).
 
-The first install keeps a backup of the original file (`*.cmdgate-backup`).
-Removing the hook deletes only the add-on's own entry.
-
-It copies the hook script to `~/.cmdgate/cmdgate-hook.js` and adds:
-
-```json
-{
-  "hooks": {
-    "PermissionRequest": [
-      { "matcher": "Bash|PowerShell",
-        "hooks": [{ "type": "command", "command": "node \"<home>/.cmdgate/cmdgate-hook.js\"", "timeout": 5 }] }
-    ]
-  }
-}
-```
-
-Restart running Claude Code sessions afterwards. Permission prompts only appear
-in Claude Code's default mode: in auto mode or bypass mode there is no prompt,
-so there is nothing to give a second opinion on. **Command Gate: Remove Claude Code hook** takes it out again.
-
-How it works:
-
-1. Claude Code is about to show a permission prompt and runs the hook with the
-   tool call on stdin.
-2. The hook finds the VS Code window whose workspace contains the command's
-   working directory. Each window writes its port and a random token to
-   `~/.cmdgate/windows/`.
-3. The hook sends that window the command and the agent's description.
-4. The window asks the app and shows the answer.
-
-The hook prints nothing and always exits 0, so Claude Code's prompt and your
-choice there are unaffected. If no window or app answers, nothing happens. The
-listener binds to `127.0.0.1` only and refuses requests without the token.
+Permission prompts only appear in Claude Code's default mode: in auto mode or
+bypass mode there is no prompt, so there is nothing to give a second opinion on.
 
 ## Settings
 
@@ -129,7 +105,8 @@ The add-on sends one request per command:
 
 It reads `answers.<id>.noul` for yes/no questions and
 `answers.risk_level.probabilities` (`"0"`–`"4"`) for the level. A missing
-answer shows as **n/a**; nothing is guessed.
+answer shows as **n/a**; nothing is guessed. The Claude Code plugin sends the
+same request.
 
 **Known gap in the current baseline engine** (`cmdgate/engine.py`): it gives
 every yes/no question the same "risky" probability. That makes *dangerous*,
@@ -150,5 +127,5 @@ The tests cover:
 - the n/a handling;
 - the HTTP client against a fake app;
 - HTML escaping in the panel;
-- the hook end to end: it forwards to the right window and prints no decision;
+- the listener taking an event in the plugin's format, answer included;
 - the listener refusing requests without the token.
