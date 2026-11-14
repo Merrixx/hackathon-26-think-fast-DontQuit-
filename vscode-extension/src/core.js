@@ -62,15 +62,42 @@ function readLevel(answer, levels = LEVELS) {
   return { index, level: levels[index], p: probabilities[index], probabilities };
 }
 
+// What each model of the backend said, when the backend sends it: its own risk and whether it passed its threshold.
+function readModels(body) {
+  const models = body && body.models;
+  if (!models || typeof models !== "object") return [];
+  return Object.entries(models).map(([name, m]) => {
+    const p = m && m.p !== null && m.p !== undefined ? clamp01(m.p) : null;
+    const failed = Boolean(m && m.failed === true) || p === null;
+    return { name, p, threshold: m && m.threshold !== null && m.threshold !== undefined ? clamp01(m.threshold) : null,
+      passed: !failed && Boolean(m && m.passed === true), failed };
+  });
+}
+
+function readDecision(body) {
+  return body && typeof body.decision === "string"
+    ? { decision: body.decision, reason: typeof body.reason === "string" ? body.reason : "" }
+    : null;
+}
+
 // `body` is the app's JSON reply. Missing or malformed answers become null and
-// are shown as "n/a", never guessed.
+// are shown as "n/a", never guessed. When the backend sends its own decision,
+// the verdict is that decision, not this add-on's threshold.
 function parseAnswers(body, { threshold = 0.5, fields = DEFAULT_FIELDS, levels = LEVELS } = {}) {
   const answers = (body && body.answers) || {};
+  const decision = readDecision(body);
+  let verdict = readYesNo(answers[fields.verdict], threshold);
+  if (decision) {
+    const mean = body.mean !== null && body.mean !== undefined ? clamp01(body.mean) : null;
+    verdict = { p: mean !== null ? mean : verdict ? verdict.p : 0, yes: decision.decision === "ask" || decision.decision === "deny" };
+  }
   return {
     dangerous: readYesNo(answers[fields.dangerous], threshold),
     root: readYesNo(answers[fields.root], threshold),
     risk: readLevel(answers[fields.riskLevel], levels),
-    verdict: readYesNo(answers[fields.verdict], threshold),
+    verdict,
+    models: readModels(body),
+    decision,
   };
 }
 
