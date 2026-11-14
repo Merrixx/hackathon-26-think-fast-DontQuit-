@@ -65,8 +65,13 @@ def confident(preds: dict[str, float], low: float, high: float) -> dict[str, boo
     return {i: p >= high for i, p in preds.items() if p <= low or p >= high}
 
 
-def build(preds_path: Path, out: Path, cap: int, low: float, high: float, pool: Path = POOL_DIR) -> None:
+def build(preds_path: Path, out: Path, cap: int, low: float, high: float, safe_per_risky: float = 0.0,
+          pool: Path = POOL_DIR) -> None:
     labels = confident(json.loads(preds_path.read_text()), low, high)
+    if safe_per_risky:  # the pool is mostly harmless: keep a fixed-seed sample of the not-risky answers
+        safe = sorted(i for i, risky in labels.items() if not risky)
+        keep = set(random.Random(0).sample(safe, min(len(safe), int(safe_per_risky * sum(labels.values())))))
+        labels = {i: risky for i, risky in labels.items() if risky or i in keep}
     pool_rows = dict(json.loads((pool / "ids.json").read_text()))
     taught = [Command(i, pool_rows[i], HIGH if risky else SAFE, "distilled", i) for i, risky in sorted(labels.items())]
     train = load_split("train")
@@ -95,11 +100,13 @@ def main() -> None:
     make.add_argument("--cap", type=int, default=16)
     make.add_argument("--low", type=float, default=0.1)
     make.add_argument("--high", type=float, default=0.9)
+    make.add_argument("--safe-per-risky", type=float, default=0.0,
+                      help="keep at most this many not-risky pool commands per risky one; 0 keeps all")
     args = parser.parse_args()
     if args.action == "pool":
         write_pool(args.size)
     else:
-        build(args.preds, args.out, args.cap, args.low, args.high)
+        build(args.preds, args.out, args.cap, args.low, args.high, args.safe_per_risky)
 
 
 if __name__ == "__main__":
