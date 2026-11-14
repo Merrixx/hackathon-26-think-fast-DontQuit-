@@ -75,6 +75,25 @@ Validation split only, 3,541 commands in 128 template families. Ranges resample 
 | Always the training level shares | 0.587 | 0.497 | 0.079 | 0.0% | 0.000 |
 | Rules (regex denylist) | 0.773 | 0.368 | 0.105 | 0.0% | 0.000 |
 | Character n-grams + logistic regression | 0.906 [0.835, 0.952] | 0.155 | 0.025 | 77.4% [40.2%, 100%] | 0.764 [0.595, 0.954] |
+| Hashreg (hashed word+char + logistic) | 0.894 [0.832, 0.943] | 0.171 | 0.026 | 76.0% [28.8%, 97.1%] | 0.707 [0.521, 0.925] |
+| Kev-0.8B fine-tune (`runs/cmdrisk-0.8b`) | 0.909 | 0.172 | 0.085 | 0.0% | 0.000 |
+
+Kev matches n-gram accuracy but does **not** automate at a 5% error budget (calibration / confidence ranking is weak on this split). AUROC on P(risky) is 0.941. Full report: `results/kev08_validation/report.json`.
+
+<!-- kev08_calibration -->
+
+### Kev-0.8B post-hoc calibration (validation)
+
+Raw Kev probabilities are almost all 0 or 1, so confidence ranking cannot automate anything at a 5% error budget (**0.0%** automated). Temperature scaling and isotonic regression were fit on this same validation split (not the test set; optimistic vs a held-out calib slice).
+
+| Method | Accuracy | Brier | ECE | Automated at 5% errors | Confidence threshold |
+|---|---|---|---|---|---|
+| Raw (as served) | 0.909 | 0.172 | 0.085 | 0.0% | 1.0000 |
+| Temperature (T=5.064) | 0.909 | 0.144 | 0.023 | 0.0% | 1.0000 |
+| Isotonic regression | 0.913 | 0.136 | 0.000 | 53.4% | 0.9514 |
+
+**Winner:** isotonic — **53.4%** automated at 5% errors (threshold confidence ≥ **0.9514**), up from **0.0%** raw. Machine-readable: `results/kev08_calibration.json`.
+
 
 ```bash
 uv run --extra ml python -m cmdgate.fetch_data
@@ -82,6 +101,9 @@ uv run --extra ml python -m cmdgate.ngram
 uv run --extra ml python -m cmdgate.evaluate --scorer prior --split validation
 uv run --extra ml python -m cmdgate.evaluate --scorer rules --split validation
 uv run --extra ml python -m cmdgate.evaluate --scorer ngram --split validation
+uv run --extra ml python -m cmdgate.hashreg
+uv run --extra ml python -m cmdgate.evaluate --scorer hashreg --split validation
+# after serve: uv run python -m cmdgate.score_api --endpoint http://127.0.0.1:8010/v1/systemone --suite data/cmdrisk_validation.jsonl --out results/kev08_validation
 ```
 
 ## Recommendation

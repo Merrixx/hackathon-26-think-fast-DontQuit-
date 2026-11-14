@@ -104,12 +104,15 @@ def make_scorer(name: str, train: list[Command]) -> Any:
     if name == "ngram":
         from .ngram import NgramScorer
         return NgramScorer()
+    if name == "hashreg":
+        from .hashreg import HashRegScorer
+        return HashRegScorer()
     raise ValueError(f"unknown scorer: {name}")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--scorer", choices=["prior", "rules", "ngram"], required=True)
+    parser.add_argument("--scorer", choices=["prior", "rules", "ngram", "hashreg"], required=True)
     parser.add_argument("--split", choices=SPLITS, default="validation")
     parser.add_argument("--resamples", type=int, default=500)
     parser.add_argument("--out", type=Path, default=Path("results"))

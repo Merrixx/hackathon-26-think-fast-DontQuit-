@@ -97,10 +97,13 @@ def load_scorer(name: str) -> Scorer:
     if name == "ngram":
         from .ngram import NgramScorer
         return NgramScorer()
+    if name == "hashreg":
+        from .hashreg import HashRegScorer
+        return HashRegScorer()
     raise ValueError(f"unknown scorer: {name}")
 
 
-SCORERS = ("rules", "ngram")
+SCORERS = ("rules", "ngram", "hashreg")
 
 
 def main() -> None:
