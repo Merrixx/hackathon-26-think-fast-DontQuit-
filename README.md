@@ -77,6 +77,7 @@ The problem we locked in: should a person approve this shell command before an A
 | `cmdgate/engine.py` | Serves any scorer behind `POST /v1/systemone` |
 | `cmdgate/evaluate.py` | Scores a scorer on a split, with ranges from resampling whole template families |
 | [vscode-extension/](vscode-extension/README.md) | VS Code add-on: a second opinion on the commands an agent asks permission for, answered by the local app. Demo with fake data: [DEMO.md](vscode-extension/DEMO.md) |
+| [docs/cursor-cmdgate-hook.md](docs/cursor-cmdgate-hook.md) | Cursor project hook (`.cursor/hooks/`): same decision API / notice line for agent shell commands |
 
 Downloading and reading the datasets needs two extra libraries, kept in the optional `ml` group:
 
