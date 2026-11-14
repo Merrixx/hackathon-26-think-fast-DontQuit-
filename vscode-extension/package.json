@@ -126,6 +126,13 @@
           "default": true,
           "description": "Open the second-opinion card beside the editor (without taking focus) when a command is checked."
         },
+        "cmdgate.chatCardPort": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 65535,
+          "description": "Experimental. 0 = off. When set, serves the latest result for a command on 127.0.0.1:<port>/card, readable only by VS Code webviews, so a patched chat view can show the card inline. Reload the window after changing it."
+        },
         "cmdgate.notifyOnPrompt": {
           "type": "string",
           "enum": [
