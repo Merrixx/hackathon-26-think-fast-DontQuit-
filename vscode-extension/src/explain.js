@@ -94,32 +94,70 @@ const T = {
   "w:pipe-sh": ["Downloads code from the internet and runs it right away, without you seeing it first.", "Lädt Code aus dem Internet und führt ihn sofort aus, ohne dass du ihn vorher siehst.", "Descarga código de internet y lo ejecuta al instante, sin que lo veas antes.", "Télécharge du code depuis internet et l'exécute aussitôt, sans que tu le voies avant.", "Scarica codice da internet e lo esegue subito, senza che tu lo veda prima.", "Baixa código da internet e executa na hora, sem você ver antes.", "İnternetten kod indirir ve önce görmeden hemen çalıştırır.", "Preuzima kod s interneta i odmah ga pokreće, a da ga prije ne vidiš."],
 };
 
+Object.assign(T, require("./explain-more"));
+T["h:del"] = T["h:shred"] = T["h:rm"];
+T["h:mkfs"] = T["h:t:dev"] = T["h:dd"];
+T["h:docker system"] = T["h:f:prune"];
+T["docker exec"] = T["kubectl exec"];
+T["kubectl describe"] = T["kubectl logs"] = T["kubectl get"];
+
 const PROGS = {
   rm: "rm", rmdir: "del", rd: "del", del: "del", erase: "del", "remove-item": "del", ri: "del",
   mv: "mv", move: "mv", "move-item": "mv", ren: "mv", cp: "cp", copy: "cp", "copy-item": "cp",
   ls: "ls", dir: "ls", "get-childitem": "ls", gci: "ls", cat: "cat", type: "cat", "get-content": "cat", gc: "cat", less: "cat", head: "cat", tail: "cat",
   echo: "echo", "write-output": "echo", "write-host": "echo", printf: "echo", cd: "cd", "set-location": "cd", mkdir: "mkdir", md: "mkdir",
-  chmod: "chmod", chown: "chown", curl: "curl", wget: "curl", "invoke-webrequest": "curl", iwr: "curl", "invoke-restmethod": "curl", irm: "curl",
-  sh: "sh", bash: "sh", zsh: "sh", iex: "sh", "invoke-expression": "sh", dd: "dd", mkfs: "mkfs", wipefs: "mkfs", format: "mkfs",
-  kill: "kill", pkill: "kill", killall: "kill", taskkill: "kill", "stop-process": "kill", shutdown: "shutdown", reboot: "shutdown", poweroff: "shutdown", "restart-computer": "shutdown", "stop-computer": "shutdown",
+  chmod: "chmod", icacls: "chmod", chown: "chown", takeown: "chown",
+  curl: "curl", wget: "curl", "invoke-webrequest": "curl", iwr: "curl", "invoke-restmethod": "curl", irm: "curl",
+  sh: "sh", bash: "sh", zsh: "sh", iex: "sh", "invoke-expression": "sh", eval: "sh", source: "source", ".": "source",
+  dd: "dd", mkfs: "mkfs", wipefs: "mkfs", format: "mkfs", diskpart: "mkfs", "format-volume": "mkfs", "clear-disk": "mkfs",
+  kill: "kill", pkill: "kill", killall: "kill", taskkill: "kill", "stop-process": "kill",
+  shutdown: "shutdown", reboot: "shutdown", poweroff: "shutdown", "restart-computer": "shutdown", "stop-computer": "shutdown",
   ssh: "ssh", scp: "scp", rsync: "scp", tar: "tar", unzip: "tar", zip: "tar", find: "find", grep: "grep", rg: "grep", "select-string": "grep",
   python: "run", python3: "run", py: "run", node: "run", java: "run", powershell: "run", pwsh: "run", cmd: "run",
-  systemctl: "systemctl", service: "systemctl", "set-executionpolicy": "execpolicy", git: "git", docker: "docker",
+  systemctl: "systemctl", service: "systemctl", "stop-service": "systemctl", "restart-service": "systemctl", "set-service": "systemctl", sc: "systemctl",
+  "set-executionpolicy": "execpolicy", git: "git", docker: "docker",
+  "get-process": "ps", ps: "ps", tasklist: "ps", top: "ps", htop: "ps",
+  "new-item": "touch", ni: "touch", touch: "touch",
+  "set-content": "write", "add-content": "write", "out-file": "write", tee: "write",
+  "start-process": "start", start: "start", saps: "start",
+  reg: "registry", regedit: "registry", "set-itemproperty": "registry", "new-itemproperty": "registry", "remove-itemproperty": "registry",
+  netsh: "firewall", iptables: "firewall", ufw: "firewall", "new-netfirewallrule": "firewall", "set-netfirewallprofile": "firewall",
+  net: "users", useradd: "users", userdel: "users", usermod: "users", passwd: "users", "new-localuser": "users", "add-localgroupmember": "users",
+  schtasks: "schtask", crontab: "schtask", "register-scheduledtask": "schtask", at: "schtask",
+  bcdedit: "boot", "grub-install": "boot", efibootmgr: "boot", vssadmin: "shadow", wbadmin: "shadow",
+  npx: "npx", bunx: "npx", pnpx: "npx", kubectl: "kubectl", terraform: "terraform", tofu: "terraform",
+  psql: "db", mysql: "db", sqlite3: "db", mongosh: "db", mongo: "db", "redis-cli": "db", sqlcmd: "db",
+  nc: "nc", ncat: "nc", netcat: "nc", socat: "nc", base64: "b64", sed: "sed", shred: "shred",
 };
-const MANAGERS = ["npm", "pnpm", "yarn", "pip", "pip3", "apt", "apt-get", "brew", "choco", "winget", "cargo", "gem"];
-const INSTALL = ["install", "i", "add"];
+const MANAGERS = ["npm", "pnpm", "yarn", "bun", "pip", "pip3", "apt", "apt-get", "brew", "choco", "winget", "cargo", "gem"];
+const INSTALL = ["install", "i", "add", "ci"];
 const UNINSTALL = ["uninstall", "remove", "rm", "purge"];
+const PKGRUN = ["run", "start", "test", "exec", "x", "dlx"];
 const PREFIX = { sudo: "sudo", doas: "sudo", runas: "sudo" };
 const SKIP = new Set(["env", "nohup", "time", "exec", "command"]);
+const SUBCMD = new Set(["git", "docker", "kubectl", "terraform"]);
+const RISKY_PROGS = new Set(["rm", "del", "dd", "mkfs", "sh", "shutdown", "execpolicy", "registry", "boot", "shadow", "firewall", "users", "nc", "shred"]);
+const RISKY_SUBS = new Set(["push", "reset", "clean", "rebase", "system", "delete", "destroy", "publish", "prune"]);
+const RISKY_FLAGS = new Set(["f:recursive", "f:force", "f:nopreserve", "f:pushforce", "f:hard", "f:cleandir", "f:cleanx", "f:777", "f:delete", "f:prune", "f:cronr"]);
+const DESTRUCTIVE = new Set(["rm", "del", "mv", "cp", "chmod", "chown", "dd", "mkfs", "shred"]);
+const SQL = /\b(drop\s+(table|database|schema)|truncate(\s+table)?\s+\w|delete\s+from|flushall|flushdb)\b/i;
+const DYN = /\$\(|`|\$\{|\$[A-Za-z_]|%[A-Za-z_]+%/;
+const FETCH_RUN = /\b(iwr|irm|invoke-webrequest|invoke-restmethod|downloadstring|curl|wget)\b/i;
+const HIDDEN = /frombase64string|\bbase64\s+(-d|--decode)\b/i;
 
 function flagKey(prog, sub, flag) {
   const f = flag.toLowerCase();
+  if (f === "-whatif" || f === "--dry-run" || f.startsWith("--dry-run=") || (prog === "git" && sub === "clean" && f === "-n")) return "f:whatif";
+  if (f === "-confirm:$false" || f === "-y" || f === "--yes" || f === "--assume-yes" || f === "-auto-approve" || f === "--auto-approve") return "f:noconfirm";
+  if (prog === "del" && f === "/s") return "f:recursive";
+  if (prog === "del" && f === "/q") return "f:noconfirm";
+  if (prog === "del" && f === "/f") return "f:force";
   if (prog === "rm" || prog === "del" || prog === "cp" || prog === "chmod" || prog === "chown") {
-    if (["-r", "-R", "--recursive", "-recurse"].includes(flag) || f === "-recurse") return "f:recursive";
+    if (f === "-r" || f === "--recursive" || f === "-recurse") return "f:recursive";
     if (f === "-f" || f === "--force" || f === "-force") return "f:force";
     if (f === "--no-preserve-root") return "f:nopreserve";
   }
-  if (prog === "git" && sub === "push" && (f === "-f" || f === "--force" || f.startsWith("--force-with-lease"))) return "f:pushforce";
+  if (prog === "git" && sub === "push" && (f === "-f" || f === "--force")) return "f:pushforce";
   if (prog === "git" && sub === "reset" && f === "--hard") return "f:hard";
   if (prog === "git" && sub === "clean") {
     if (f === "-f" || f === "--force") return "f:force";
@@ -129,25 +167,32 @@ function flagKey(prog, sub, flag) {
   if (prog === "curl") { if (f === "-s" || f === "--silent") return "f:silent"; if (f === "-l" || f === "--location") return "f:follow"; }
   if (prog === "find" && f === "-delete") return "f:delete";
   if (prog === "docker" && (f === "-a" || f === "--all" || f === "-f" || f === "--force")) return "f:force";
+  if (prog === "kubectl" && (f === "--all" || f === "--force")) return "f:force";
   if (prog === "kill" && (f === "-9" || f === "/f" || f === "-force")) return "f:force";
+  if (prog === "sed" && (f === "-i" || f.startsWith("-i.") || f === "--in-place")) return "f:inplace";
+  if (prog === "schtask" && f === "-r") return "f:cronr";
   return null;
 }
 
-// Shell-ish split: operators become their own tokens, quotes keep spaces.
+// Shell-ish split with positions: words are {text,start,end}, operators {op,start,end}.
+// Quotes keep spaces, $( … ) and `…` stay one word so runtime parts are seen as a whole.
 function tokenize(cmd) {
   const out = [];
-  let cur = "", q = null;
-  const push = () => { if (cur) out.push(cur); cur = ""; };
+  let cur = "", q = null, start = -1, depth = 0;
+  const push = (end) => { if (start >= 0) out.push({ text: cur, start, end }); cur = ""; start = -1; };
   for (let i = 0; i < cmd.length; i++) {
     const c = cmd[i], two = cmd.slice(i, i + 2);
-    if (q) { if (c === q) q = null; else cur += c; continue; }
-    if (c === "'" || c === '"') { q = c; continue; }
-    if (/\s/.test(c)) { push(); continue; }
-    if (two === "&&" || two === "||" || two === ">>") { push(); out.push({ op: two }); i++; continue; }
-    if (c === "|" || c === ";" || c === ">") { push(); out.push({ op: c }); continue; }
+    if (q) { if (c === q) { q = null; if (c === "`") cur += c; } else cur += c; continue; }
+    if (depth) { cur += c; if (c === "(") depth++; else if (c === ")") depth--; continue; }
+    if (c === "'" || c === '"' || c === "`") { if (start < 0) start = i; q = c; if (c === "`") cur += c; continue; }
+    if (two === "$(") { if (start < 0) start = i; cur += two; depth = 1; i++; continue; }
+    if (/\s/.test(c)) { push(i); continue; }
+    if (two === "&&" || two === "||" || two === ">>") { push(i); out.push({ op: two, start: i, end: i + 2 }); i++; continue; }
+    if (c === "|" || c === ";" || c === ">") { push(i); out.push({ op: c, start: i, end: i + 1 }); continue; }
+    if (start < 0) start = i;
     cur += c;
   }
-  push();
+  push(cmd.length);
   return out;
 }
 
@@ -168,78 +213,148 @@ function targetKey(tok) {
 
 function explain(command, lang = "en") {
   if (!L.includes(lang)) lang = "en";
-  const toks = tokenize(String(command));
+  const cmdText = String(command);
+  const toks = tokenize(cmdText);
   const parts = [];
   const sentences = [];
+  const warnings = [];
+  const safer = new Set();
+  const warn = (key, x) => { const w = t(key, lang, x); if (!warnings.includes(w)) warnings.push(w); };
   let seg = null;
   let prevProg = null;
+  let pipeSh = false;
+
+  // one row per word; a known "h:<key>" adds what can go wrong and marks it risky
+  const add = (tok, kind, meaning, key, risky) => {
+    const p = { text: tok.text != null ? tok.text : tok.op, start: tok.start, end: tok.end, kind, meaning };
+    const harm = key && T["h:" + key] ? t("h:" + key, lang) : null;
+    if (harm) p.harm = harm;
+    if (risky || harm) p.risky = true;
+    parts.push(p);
+    return p;
+  };
   const close = () => {
-    if (!seg || !seg.main) return;
+    if (!seg) return;
+    if (!seg.whatif) (seg.safer || []).forEach((k) => safer.add(k));
+    if (!seg.main) return;
     let s = (seg.root ? t("asroot", lang) + " " : "") + seg.main;
     if (seg.flags.length) s += " (" + seg.flags.join(", ") + ")";
     if (seg.targets.length) s += " → " + seg.targets.join(", ");
     sentences.push(s);
   };
-  const warnings = [];
+
   for (const tok of toks) {
-    if (typeof tok === "object") {
+    if (tok.op) {
       close();
-      parts.push({ text: tok.op, kind: "op", meaning: t("op:" + tok.op, lang) });
-      if (tok.op === "|") seg = { pipeFrom: prevProg }; else seg = null;
-      if (tok.op === ">" || tok.op === ">>") seg = { redirect: true };
+      add(tok, "op", t("op:" + tok.op, lang));
+      seg = tok.op === "|" ? { pipeFrom: prevProg } : tok.op === ">" || tok.op === ">>" ? { redirect: true } : null;
       continue;
     }
+    const word = tok.text;
     if (!seg || (!seg.prog && !seg.redirect)) {
       const from = seg && seg.pipeFrom;
       seg = seg || {};
-      seg.flags = seg.flags || []; seg.targets = seg.targets || [];
-      const base = tok.replace(/^.*[\\/]/, "").replace(/\.exe$/i, "").toLowerCase();
-      if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(tok)) { parts.push({ text: tok, kind: "arg", meaning: t("target", lang, tok) }); continue; }
-      if (PREFIX[base]) { seg.root = true; parts.push({ text: tok, kind: "prefix", risky: true, meaning: t("sudo", lang) }); continue; }
-      if (SKIP.has(base)) { parts.push({ text: tok, kind: "prefix", meaning: t("run", lang) }); continue; }
-      if (MANAGERS.includes(base)) { seg.prog = "pkg"; seg.main = null; parts.push({ text: tok, kind: "prog", meaning: t("install", lang) }); continue; }
+      seg.flags = seg.flags || []; seg.targets = seg.targets || []; seg.safer = seg.safer || [];
+      const base = word.replace(/^.*[\\/]/, "").replace(/\.exe$/i, "").toLowerCase();
+      if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(word)) { add(tok, "arg", t("target", lang, word)); continue; }
+      if (PREFIX[base]) { seg.root = true; seg.safer.push("s:sudo"); add(tok, "prefix", t("sudo", lang), "sudo", true); continue; }
+      if (SKIP.has(base)) { add(tok, "prefix", t("run", lang)); continue; }
+      seg.base = base;
+      if (MANAGERS.includes(base)) { seg.prog = "pkg"; seg.main = null; add(tok, "prog", t("pkg", lang)); prevProg = "pkg"; continue; }
+      if (base === "docker-compose") {
+        seg.prog = "docker"; seg.sub = "compose"; seg.main = t("docker compose", lang);
+        add(tok, "prog", seg.main); prevProg = "docker"; continue;
+      }
       const key = PROGS[base] || (/^mkfs/.test(base) ? "mkfs" : null);
       seg.prog = key || base;
-      seg.main = key ? t(key, lang) : t("unknownProg", lang, tok);
-      parts.push({ text: tok, kind: "prog", risky: ["rm", "del", "dd", "mkfs", "sh", "shutdown", "execpolicy"].includes(key), meaning: seg.main });
-      if (key === "sh" && from === "curl") warnings.push(t("w:pipe-sh", lang));
+      seg.main = key ? t(key, lang) : t("unknownProg", lang, word);
+      add(tok, "prog", seg.main, key, RISKY_PROGS.has(key));
+      if (key === "rm") seg.safer.push("s:rm");
+      if (key === "del") seg.safer.push("s:del");
+      if (key === "dd" || key === "mkfs") seg.safer.push("s:dd");
+      if (key === "sh" && from === "curl") pipeSh = true;
+      if (key === "sh" && (from === "b64" || from === "echo")) warn("w:hidden");
       prevProg = seg.prog;
       continue;
     }
-    if (seg.redirect) { parts.push({ text: tok, kind: "arg", meaning: t("target", lang, tok) }); continue; }
-    // subcommands
-    if (!seg.sub && (seg.prog === "git" || seg.prog === "docker") && !tok.startsWith("-")) {
-      seg.sub = tok.toLowerCase();
+    if (seg.redirect) { add(tok, "arg", t("target", lang, word)); continue; }
+
+    // subcommands: git push, kubectl delete, terraform destroy, npm install …
+    if (!seg.sub && SUBCMD.has(seg.prog) && !word.startsWith("-")) {
+      seg.sub = word.toLowerCase();
       const k = `${seg.prog} ${seg.sub}`;
-      if (T[k]) { seg.main = t(k, lang); parts.push({ text: tok, kind: "sub", meaning: seg.main, risky: ["push", "reset", "clean", "rebase", "system"].includes(seg.sub) }); }
-      else parts.push({ text: tok, kind: "sub", meaning: t("flag", lang, tok) });
-      if (seg.prog === "docker" && seg.sub === "system") seg.flags.push(t("f:prune", lang));
+      if (T[k]) { seg.main = t(k, lang); add(tok, "sub", seg.main, k, RISKY_SUBS.has(seg.sub)); }
+      else add(tok, "sub", t("flag", lang, word));
+      if (seg.prog === "docker" && seg.sub === "system") { seg.flags.push(t("f:prune", lang)); seg.safer.push("s:prune"); }
+      if (k === "git clean") seg.safer.push("s:clean");
+      if (k === "terraform destroy" || k === "terraform apply") seg.safer.push("s:tf");
+      if (k === "kubectl delete" || k === "kubectl apply") seg.safer.push("s:kube");
       continue;
     }
     if (!seg.sub && seg.prog === "pkg") {
-      seg.sub = tok.toLowerCase();
-      seg.main = t(UNINSTALL.includes(seg.sub) ? "uninstall" : "install", lang);
-      parts.push({ text: tok, kind: "sub", meaning: seg.main });
+      seg.sub = word.toLowerCase();
+      const k = INSTALL.includes(seg.sub) ? "install" : UNINSTALL.includes(seg.sub) ? "uninstall"
+        : PKGRUN.includes(seg.sub) ? "pkgrun" : seg.sub === "publish" ? "publish" : null;
+      seg.main = k ? t(k, lang) : t("pkg", lang);
+      add(tok, "sub", k ? seg.main : t("flag", lang, word), k, k === "publish");
       continue;
     }
-    if (seg.prog === "chmod" && /^(0?777|a\+rwx|ugo\+rwx)$/.test(tok)) {
-      const m = t("f:777", lang); seg.flags.push(m); parts.push({ text: tok, kind: "flag", risky: true, meaning: m }); continue;
+    if (seg.prog === "docker" && word === "prune") {
+      const m = t("f:prune", lang); seg.flags.push(m); seg.safer.push("s:prune"); add(tok, "flag", m, "f:prune", true); continue;
     }
-    if (/^(-|\/[a-z]$)/i.test(tok) && !(seg.prog === "kill" && /^\d/.test(tok))) {
-      // -rf -> -r -f
-      const flags = /^-[a-zA-Z]{2,}$/.test(tok) && seg.prog !== "find" ? tok.slice(1).split("").map((c) => "-" + c) : [tok];
-      const meanings = flags.map((f) => flagKey(seg.prog, seg.sub, f)).filter(Boolean).map((k) => t(k, lang));
+    if (seg.prog === "chmod" && /^(0?777|a\+rwx|ugo\+rwx)$/.test(word)) {
+      const m = t("f:777", lang); seg.flags.push(m); seg.safer.push("s:777"); add(tok, "flag", m, "f:777", true); continue;
+    }
+    if (/^(-|\/[a-z]$)/i.test(word) && !(seg.prog === "kill" && /^\d/.test(word))) {
+      if (seg.prog === "run" && /^(powershell|pwsh)$/.test(seg.base) && /^-(e|ec|enc|encodedcommand)$/i.test(word)) {
+        warn("w:hidden"); add(tok, "flag", t("w:hidden", lang), null, true); continue;
+      }
+      if (seg.prog === "rm" && /^-[a-z]*i/i.test(word) && !word.startsWith("--")) seg.whatif = true; // rm -i asks first
+      // -rf -> -r -f, but only short unknown bundles (PowerShell -Filter stays one word)
+      const whole = flagKey(seg.prog, seg.sub, word);
+      const flags = !whole && /^-[a-zA-Z]{2,3}$/.test(word) && seg.prog !== "find" ? word.slice(1).split("").map((c) => "-" + c) : [word];
+      const keys = flags.map((f) => flagKey(seg.prog, seg.sub, f)).filter(Boolean);
+      if (keys.includes("f:whatif")) seg.whatif = true;
+      if (keys.includes("f:pushforce")) seg.safer.push("s:pushforce");
+      if (keys.includes("f:hard")) seg.safer.push("s:hard");
+      const meanings = keys.map((k) => t(k, lang));
       meanings.forEach((m) => { if (!seg.flags.includes(m)) seg.flags.push(m); });
-      parts.push({ text: tok, kind: "flag", risky: meanings.length > 0 && seg.prog !== "curl", meaning: meanings.length ? meanings.join(", ") : t("flag", lang, tok) });
+      const harmKey = keys.find((k) => T["h:" + k]);
+      add(tok, "flag", meanings.length ? meanings.join(", ") : t("flag", lang, word), harmKey, keys.some((k) => RISKY_FLAGS.has(k)) && seg.prog !== "curl");
       continue;
     }
-    const tk = targetKey(tok);
-    const m = tk ? t(tk, lang, tok.replace(/^of=/, "")) : null;
-    seg.targets.push(m || tok);
-    parts.push({ text: tok, kind: "arg", risky: !!tk && tk !== "t:*", meaning: m || t("target", lang, tok) });
+    // arguments
+    if (seg.prog === "db" && SQL.test(word)) {
+      const m = t("t:sql", lang, word); seg.targets.push(word); seg.safer.push("s:sql"); add(tok, "arg", m, "t:sql", true); continue;
+    }
+    if (seg.prog === "sh" && FETCH_RUN.test(word)) pipeSh = true;
+    if (HIDDEN.test(word)) warn("w:hidden");
+    const destructive = DESTRUCTIVE.has(seg.prog);
+    const tk = targetKey(word);
+    if (tk) {
+      const m = t(tk, lang, word.replace(/^of=/, ""));
+      seg.targets.push(m);
+      add(tok, "arg", m, destructive ? tk : null, destructive && tk !== "t:*");
+      continue;
+    }
+    if (DYN.test(word)) {
+      seg.targets.push(word);
+      if (destructive) warn("w:dynamic", word);
+      add(tok, "arg", t("t:dyn", lang, word), null, destructive);
+      continue;
+    }
+    seg.targets.push(word);
+    add(tok, "arg", t("target", lang, word));
   }
   close();
-  return { lang, langs: LANGS, title: t("title", lang), steps: t("steps", lang), note: t("note", lang), summary: sentences, warnings, parts };
+  // PowerShell style: iex (iwr …) or iwr … | iex
+  if (!pipeSh && /\b(iex|invoke-expression)\b/i.test(cmdText) && FETCH_RUN.test(cmdText)) pipeSh = true;
+  if (pipeSh) { warn("w:pipe-sh"); safer.add("s:pipe-sh"); }
+  return {
+    lang, langs: LANGS, title: t("title", lang), steps: t("steps", lang), note: t("note", lang),
+    hint: t("hint", lang), harmLabel: t("harm", lang), saferTitle: t("safer", lang),
+    summary: sentences, warnings, parts, safer: [...safer].map((k) => t(k, lang)),
+  };
 }
 
-module.exports = { explain, LANGS, tokenize };
+module.exports = { explain, LANGS, tokenize, phrase: t };
