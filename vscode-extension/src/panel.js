@@ -48,18 +48,18 @@ const ICONS = {
   ready: '<path d="M12 4 6 6.3v4.6c0 3.8 2.6 6.6 6 7.6 3.4-1 6-3.8 6-7.6V6.3z"/>',
 };
 
-// One bar, five steps, the chosen step marked. Exact numbers sit in the tooltip.
+// One bar, five steps, the chosen step marked. Each step shows its number below it.
 function scale(risk) {
   if (!risk) return "";
   const step = (i) => i === risk.index ? "bg-tone shadow-[0_0_8px_color-mix(in_srgb,var(--c)_55%,transparent)]"
     : i < risk.index ? "bg-tone/45" : "bg-track hc:bg-transparent hc:outline hc:outline-hc";
-  const steps = core.LEVELS.map((name, i) => `<i class="h-1.5 rounded-[3px] ${step(i)}" title="${esc(name)}: ${core.pct(risk.probabilities[i])}"></i>`).join("");
-  return `<div class="mx-1 mt-[14px] flex items-center gap-[10px] text-[12px]" aria-label="Risk level: ${esc(risk.level)}"><span class="text-quiet">Risk level</span><span class="grid flex-1 grid-cols-5 gap-[3px]">${steps}</span><b class="min-w-[58px] text-right capitalize">${esc(risk.level)}</b></div>`;
+  const steps = core.LEVELS.map((name, i) => `<span class="grid gap-[3px]" title="${esc(name)}: ${core.pct(risk.probabilities[i])}"><i class="h-1.5 rounded-[3px] ${step(i)}"></i><small class="text-center text-[10px]/[1.2] tabular-nums ${i === risk.index ? "font-semibold text-ink" : "text-quiet"}">${core.pct(risk.probabilities[i])}</small></span>`).join("");
+  return `<div class="mx-1 mt-[14px] flex items-start gap-[10px] text-[12px]" aria-label="Risk level: ${esc(risk.level)}"><span class="text-quiet">Risk level</span><span class="grid flex-1 grid-cols-5 gap-[3px]">${steps}</span><b class="min-w-[58px] text-right capitalize">${esc(risk.level)}</b></div>`;
 }
 
 function fact(label, v) {
   const value = v ? (v.yes ? "yes" : "no") : "n/a";
-  return `<span class="${PILL} text-[12px] text-quiet" title="${v ? core.pct(v.p) : "no answer"}">${esc(label)}: <b class="font-semibold ${v && v.yes ? "text-tone" : "text-ink"}">${value}</b></span>`;
+  return `<span class="${PILL} text-[12px] text-quiet" title="${v ? core.pct(v.p) : "no answer"}">${esc(label)}: <b class="font-semibold ${v && v.yes ? "text-tone" : "text-ink"}">${value}</b>${v ? ` <span class="tabular-nums">(${core.pct(v.p)})</span>` : ""}</span>`;
 }
 
 function who(entry) {
@@ -92,7 +92,7 @@ function slip(entry, h) {
 
 function row(entry) {
   const h = headline(entry);
-  return `<li class="${TONE[h.tone]} grid grid-cols-[8px_minmax(0,1fr)_auto_auto] items-center gap-[10px] rounded-[15px] px-2 py-1.5 lift hover:scale-[1.025] hover:bg-hov [&+&]:shadow-[0_-1px_0_var(--color-line)]"><span class="size-2 rounded-full bg-tone shadow-[0_0_6px_color-mix(in_srgb,var(--c)_60%,transparent)]"></span><code class="truncate font-mono text-[12px]">${esc(core.shorten(entry.command, 70))}</code>
+  return `<li class="${TONE[h.tone]} grid grid-cols-[8px_minmax(0,1fr)_auto_auto] items-baseline gap-[10px] rounded-[15px] px-2 py-1.5 lift hover:scale-[1.025] hover:bg-hov [&+&]:shadow-[0_-1px_0_var(--color-line)]"><span class="size-2 self-start mt-[6px] rounded-full bg-tone shadow-[0_0_6px_color-mix(in_srgb,var(--c)_60%,transparent)]"></span><code class="font-mono text-[12px] whitespace-pre-wrap [word-break:break-word]">${esc(entry.command)}</code>
     <span class="text-[12px] text-quiet">${esc(h.word)}</span><time class="text-[12px] text-quiet">${esc(entry.at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }))}</time></li>`;
 }
 
@@ -100,7 +100,7 @@ function renderPanel(history, endpoint) {
   const [latest, ...older] = history;
   const tone = latest ? headline(latest).tone : "ready";
   const body = latest
-    ? `${slip(latest, headline(latest))}${older.length ? `<section class="${GLASS} rounded-[34px] px-[18px] pt-[14px] pb-[10px]"><h2 class="${PILL} mb-1.5 text-[12px] font-semibold">Earlier checks</h2><ol class="list-none">${older.slice(0, 6).map(row).join("")}</ol></section>` : ""}`
+    ? `${slip(latest, headline(latest))}${older.length ? `<section class="${GLASS} rounded-[34px] px-[18px] pt-[14px] pb-[10px]"><h2 class="${PILL} mb-1.5 text-[12px] font-semibold">Earlier checks</h2><ol class="list-none">${older.map(row).join("")}</ol></section>` : ""}`
     : `<article class="${MAIN}"><div class="${TOP}">${badge("ready")}<div class="min-w-0 flex-1"><div class="${WORD} text-ink">Ready</div>
        <div class="text-[13px] font-semibold">Waiting for a permission prompt</div></div></div>
        <p class="${SUB}">When Claude Code asks to run a shell command, the second opinion appears here.
