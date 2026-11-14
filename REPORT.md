@@ -91,6 +91,23 @@ uv run --extra ml python -m cmdgate.evaluate --scorer vote --members rules,ngram
 
 The encoder was trained once (3 epochs, seed 0, Apple M2); its epoch and temperature were chosen on this same validation split, and so was the n-gram model's regularisation, so these validation numbers are optimistic for both. The ranges of the three learned models overlap: validation does not separate them.
 
+## In use
+
+The gate runs as a Claude Code `PreToolUse` hook ([cmdhook/README.md](cmdhook/README.md)): `cmdhook.start` keeps the models selected in `cmdhook/.env` loaded, and `cmdhook/hook.js` asks it before every shell command. In the setup we run, all four models (rules, n-grams, encoder, Kev 0.8B from `runs/cmdrisk-08b-cap16-e1`) must pass at a threshold of 0.5; a command that fails goes to the permission prompt (`ask`), so nothing is denied outright. The hook shows the same Command Gate block as the Cursor, Claude Code and Codex plugins: verdict, risk level, P(dangerous) and every model's risk with pass or fail.
+
+Any command can be checked without Claude Code:
+
+```bash
+uv run --extra ml python -m cmdhook.start
+node cmdhook/hook.js check "git push --force origin main"
+```
+
+Spot checks of hand-picked commands, not a measurement:
+
+- Routine commands (`ls`, `git status`, `uv run pytest`, `npm install`) pass. Force-push, `chmod -R 777 /`, `rm -rf ~`, `curl … | sh`, `dd` onto a disk and piping an SSH key to `nc` fail on every model.
+- The rules model gives only two risk values, and with "every model must pass" it alone sends harmless commands to the prompt, such as `find . -name '*.pyc' -delete` or an `echo` that writes `rm -rf /` into a text file.
+- The models miss different commands: Kev passes the fork bomb `:(){ :|:& };:` that the n-grams and the encoder catch, and is the only one to fail `docker system prune -af`.
+
 ## Recommendation
 
 Not written yet.
