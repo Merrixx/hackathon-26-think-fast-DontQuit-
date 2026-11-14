@@ -5,7 +5,6 @@ const fs = require("fs");
 const http = require("http");
 const os = require("os");
 const path = require("path");
-const { spawn } = require("child_process");
 
 const core = require("../src/core");
 const { postJson } = require("../src/client");
@@ -95,34 +94,34 @@ test("panel explains an app that did not answer, and an empty history", () => {
   assert.ok(renderPanel([], "x").includes("Waiting for a permission prompt"));
 });
 
-test("hook forwards a permission prompt to the right window and makes no decision", async () => {
+for (const source of ["Claude Code", "Cursor", "Codex"]) {
+test(`listener takes a ${source} plugin event with its answer`, async () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "cmdgate-"));
   const events = [];
   const { server, token, port } = await bridge.startListener((e) => events.push(e));
-  const project = path.join(home, "project");
-  const file = bridge.writeDiscovery({ port, token, folders: [project], home });
+  const file = bridge.writeDiscovery({ port, token, folders: [], home });
   try {
-    const hook = path.join(__dirname, "..", "hook", "cmdgate-hook.js");
-    const input = JSON.stringify({ hook_event_name: "PermissionRequest", tool_name: "Bash", cwd: path.join(project, "src"),
-      tool_input: { command: "git push --force origin main", description: "Force-push main" } });
-    const { code, stdout } = await new Promise((resolve) => {
-      const child = spawn(process.execPath, [hook], { env: { ...process.env, HOME: home, USERPROFILE: home } });
-      let out = "";
-      child.stdout.on("data", (c) => { out += c; });
-      child.on("close", (c) => resolve({ code: c, stdout: out }));
-      child.stdin.end(input);
+    // What cmdgate-claude-plugin/hooks/register.ts sends: it reads the discovery file for port and token.
+    const win = JSON.parse(fs.readFileSync(file, "utf8"));
+    const status = await new Promise((resolve) => {
+      const req = http.request({ host: "127.0.0.1", port: win.port, path: "/event", method: "POST",
+        headers: { "content-type": "application/json", "x-cmdgate-token": win.token } },
+      (res) => { res.resume(); resolve(res.statusCode); });
+      req.end(JSON.stringify({ source, tool: "Bash", command: "git push --force origin main",
+        description: "Force-push main", result: ANSWER }));
     });
-    assert.strictEqual(code, 0);
-    assert.strictEqual(stdout, "", "the hook must not print a decision");
+    assert.strictEqual(status, 202);
     assert.strictEqual(events.length, 1);
-    assert.strictEqual(events[0].command, "git push --force origin main");
+    assert.strictEqual(events[0].source, source);
     assert.strictEqual(events[0].description, "Force-push main");
+    assert.strictEqual(core.parseAnswers(events[0].result).risk.level, "critical");
   } finally {
     bridge.removeDiscovery(file);
     server.close();
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
+}
 
 test("listener refuses requests without the window token", async () => {
   const { server, port } = await bridge.startListener(() => assert.fail("must not be called"));

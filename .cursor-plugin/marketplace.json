@@ -1,0 +1,14 @@
+{
+  "name": "dontquit",
+  "owner": { "name": "Merrixx" },
+  "metadata": {
+    "description": "Command Gate plugins for the DontQuit / Think Fast hackathon project."
+  },
+  "plugins": [
+    {
+      "name": "cmdgate",
+      "source": "cmdgate-cursor-plugin",
+      "description": "A second opinion on Cursor Agent shell commands from your local Command Gate app."
+    }
+  ]
+}

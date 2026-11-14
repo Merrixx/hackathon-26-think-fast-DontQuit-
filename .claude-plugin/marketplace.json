@@ -1,0 +1,5 @@
+{
+  "name": "dontquit",
+  "owner": { "name": "Merrixx" },
+  "plugins": [{ "name": "cmdgate", "source": "./cmdgate-claude-plugin" }]
+}

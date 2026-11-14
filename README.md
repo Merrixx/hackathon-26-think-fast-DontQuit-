@@ -76,7 +76,10 @@ The problem we locked in: should a person approve this shell command before an A
 | `cmdgate/rules.py`, `cmdgate/ngram.py` | The two baselines: a regex denylist, and character n-grams into a logistic regression |
 | `cmdgate/engine.py` | Serves any scorer behind `POST /v1/systemone` |
 | `cmdgate/evaluate.py` | Scores a scorer on a split, with ranges from resampling whole template families |
-| [vscode-extension/](vscode-extension/README.md) | VS Code add-on: a second opinion on the commands an agent asks permission for, answered by the local app. Demo with fake data: [DEMO.md](vscode-extension/DEMO.md) |
+| [cmdgate-claude-plugin/](cmdgate-claude-plugin/README.md) | Claude Code plugin: a second opinion from the local app as a line under every shell-command permission prompt, in any terminal or IDE. Install: `/plugin install cmdgate --marketplace Merrixx/hackathon-26-think-fast-DontQuit-` |
+| [cmdgate-cursor-plugin/](cmdgate-cursor-plugin/README.md) | Cursor plugin: the same second opinion via a `beforeShellExecution` hook (advisory only; never denies). Marketplace: [`.cursor-plugin/marketplace.json`](.cursor-plugin/marketplace.json) |
+| [cmdgate-codex-plugin/](cmdgate-codex-plugin/README.md) | Codex CLI plugin: the same styled evaluation via a native `PreToolUse` advisory, without changing permissions. Local-file setup and marketplace installation: [walkthrough](cmdgate-codex-plugin/README.md#install-and-try-it). Marketplace: [`.agents/plugins/marketplace.json`](.agents/plugins/marketplace.json) |
+| [vscode-extension/](vscode-extension/README.md) | Optional VS Code / Cursor add-on: shows the plugin's answers as a styled card. Demo with fake data: [DEMO.md](vscode-extension/DEMO.md) |
 
 Downloading and reading the datasets needs two extra libraries, kept in the optional `ml` group:
 

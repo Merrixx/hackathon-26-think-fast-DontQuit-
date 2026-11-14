@@ -3,16 +3,13 @@
 // locally running Command Gate app over the decision API.
 //
 // Where commands come from:
-//   - Claude Code permission prompts, via the PermissionRequest hook (hook/cmdgate-hook.js):
-//     only commands an agent asks you to approve, nothing that already ran
-//   - the "Check command" and "Check selection" commands
+//   - Claude Code permission prompts, forwarded by the Command Gate Claude Code
+//     plugin (cmdgate-claude-plugin/) together with the app's answer: only commands an
+//     agent asks you to approve, nothing that already ran
+//   - the "Check command" and "Check selection" commands, which ask the app directly
 // The add-on never approves, denies or blocks anything; it only shows the result.
 
 const vscode = require("vscode");
-const fs = require("fs");
-const os = require("os");
-const path = require("path");
-const { execFile } = require("child_process");
 
 const core = require("./core");
 const { postJson } = require("./client");
@@ -21,7 +18,6 @@ const { renderPanel } = require("./panel");
 const chatcard = require("./chatcard");
 
 const HISTORY_MAX = 50;
-const HOOK_MARK = "cmdgate-hook.js";
 
 let history = [];
 let panel = null;
@@ -43,12 +39,14 @@ function settings() {
   };
 }
 
-async function check(command, meta = {}) {
+// `answer` is the app's reply when the Claude Code plugin already asked it;
+// otherwise the add-on asks the app itself.
+async function check(command, meta = {}, answer = null) {
   const s = settings();
   const started = Date.now();
   const entry = { command, ...meta, at: new Date(), endpoint: s.endpoint };
   try {
-    const body = await postJson(s.endpoint, core.buildRequest(command, { model: s.model, questions: s.questions }),
+    const body = answer || await postJson(s.endpoint, core.buildRequest(command, { model: s.model, questions: s.questions }),
       s.timeoutMs);
     entry.result = core.parseAnswers(body, { threshold: s.threshold, fields: s.fields });
     entry.summary = typeof body.summary === "string" ? body.summary : "";
@@ -119,105 +117,6 @@ function refreshPanel() {
   if (panel) panel.webview.html = renderPanel(history, settings().endpoint);
 }
 
-// --- Claude Code hook install / remove ---------------------------------------
-
-function projectTarget(folder) {
-  return { label: `This project only (${path.basename(folder)})`,
-    detail: `${path.join(folder, ".claude", "settings.local.json")} (personal, not committed)`,
-    file: path.join(folder, ".claude", "settings.local.json") };
-}
-
-// Open workspace folders first, then "another project folder…", then the user-wide file.
-async function pickHookTarget(placeHolder) {
-  const targets = (vscode.workspace.workspaceFolders || []).map((f) => projectTarget(f.uri.fsPath));
-  targets.push({ label: "Another project folder…", detail: "Pick the folder you start Claude Code in", browse: true });
-  targets.push({ label: "This user (all projects)", detail: path.join(os.homedir(), ".claude", "settings.json"),
-    file: path.join(os.homedir(), ".claude", "settings.json") });
-  const picked = await vscode.window.showQuickPick(targets, { placeHolder });
-  if (!picked || !picked.browse) return picked;
-  const folders = await vscode.window.showOpenDialog({ canSelectFolders: true, canSelectFiles: false,
-    openLabel: "Use this project folder" });
-  return folders && folders[0] ? projectTarget(folders[0].fsPath) : undefined;
-}
-
-function readSettingsFile(file) {
-  if (!fs.existsSync(file)) return {};
-  const text = fs.readFileSync(file, "utf8");
-  if (!text.trim()) return {};
-  return JSON.parse(text); // a parse error stops the edit: never overwrite a file we can't read
-}
-
-function withoutOurHook(groups) {
-  return (groups || []).map((g) => ({ ...g, hooks: (g.hooks || []).filter((h) => !String(h.command || "").includes(HOOK_MARK)) }))
-    .filter((g) => g.hooks.length);
-}
-
-function nodeAvailable() {
-  return new Promise((resolve) => execFile("node", ["--version"], (err) => resolve(!err)));
-}
-
-async function installHook(context) {
-  const target = await pickHookTarget("Where should the Claude Code hook go?");
-  if (!target) return;
-  if (!(await nodeAvailable())) {
-    vscode.window.showWarningMessage("Command Gate: `node` is not on PATH. The hook needs Node.js to run; install it first.");
-    return;
-  }
-  // Copy the hook to a stable place so add-on updates don't break the path in settings.
-  const hookDir = path.join(os.homedir(), ".cmdgate");
-  fs.mkdirSync(hookDir, { recursive: true });
-  const hookPath = path.join(hookDir, HOOK_MARK);
-  fs.copyFileSync(path.join(context.extensionPath, "hook", HOOK_MARK), hookPath);
-
-  let settingsJson;
-  try {
-    settingsJson = readSettingsFile(target.file);
-  } catch (err) {
-    vscode.window.showErrorMessage(`Command Gate: ${target.file} is not valid JSON (${err.message}); fix it first.`);
-    return;
-  }
-  settingsJson.hooks = settingsJson.hooks || {};
-  const groups = withoutOurHook(settingsJson.hooks.PermissionRequest);
-  groups.push({ matcher: "Bash|PowerShell", hooks: [{ type: "command", command: `node "${hookPath}"`, timeout: 5 }] });
-  settingsJson.hooks.PermissionRequest = groups;
-  fs.mkdirSync(path.dirname(target.file), { recursive: true });
-  // Keep the first backup: it is the file as it was before the add-on ever touched it.
-  const backup = `${target.file}.cmdgate-backup`;
-  if (fs.existsSync(target.file) && !fs.existsSync(backup)) fs.copyFileSync(target.file, backup);
-  fs.writeFileSync(target.file, `${JSON.stringify(settingsJson, null, 2)}\n`);
-  const open = await vscode.window.showInformationMessage(
-    `Command Gate: hook added to ${target.file}. Claude Code permission prompts for shell commands now show a second opinion here. Restart running Claude Code sessions to pick it up.`,
-    "Open settings file");
-  if (open) vscode.window.showTextDocument(vscode.Uri.file(target.file));
-}
-
-async function removeHook() {
-  const target = await pickHookTarget("Remove the hook from where?");
-  if (!target) return;
-  if (!fs.existsSync(target.file)) {
-    vscode.window.showInformationMessage(`Command Gate: ${target.file} does not exist, so there is no hook to remove.`);
-    return;
-  }
-  let settingsJson;
-  try {
-    settingsJson = readSettingsFile(target.file);
-  } catch (err) {
-    vscode.window.showErrorMessage(`Command Gate: ${target.file} is not valid JSON (${err.message}).`);
-    return;
-  }
-  if (!settingsJson.hooks || !settingsJson.hooks.PermissionRequest) {
-    vscode.window.showInformationMessage(`Command Gate: no hook found in ${target.file}.`);
-    return;
-  }
-  const groups = withoutOurHook(settingsJson.hooks.PermissionRequest);
-  if (groups.length) settingsJson.hooks.PermissionRequest = groups;
-  else delete settingsJson.hooks.PermissionRequest;
-  if (!Object.keys(settingsJson.hooks).length) delete settingsJson.hooks;
-  // Only our hook entry is removed; everything else in the file stays as it is.
-  fs.writeFileSync(target.file, `${JSON.stringify(settingsJson, null, 2)}\n`);
-  vscode.window.showInformationMessage(`Command Gate: hook removed from ${target.file}.`);
-}
-
 // --- activation --------------------------------------------------------------
 
 async function activate(context) {
@@ -244,15 +143,14 @@ async function activate(context) {
       present(await check(text, { source: "selection" }), "off");
     }),
     vscode.commands.registerCommand("cmdgate.showPanel", showPanel),
-    vscode.commands.registerCommand("cmdgate.installClaudeHook", () => installHook(context)),
-    vscode.commands.registerCommand("cmdgate.removeClaudeHook", removeHook),
   );
 
-  // Listener for the Claude Code hook.
+  // Listener for Command Gate plugins (Claude Code, Cursor, Codex, or the same protocol).
   try {
     const { server, token, port } = await bridge.startListener(async (event) => {
+      const answer = event.result && typeof event.result === "object" ? event.result : null;
       const entry = await check(event.command, { source: event.source || "hook", description: event.description,
-        cwd: event.cwd });
+        cwd: event.cwd }, answer);
       present(entry, settings().notifyOnPrompt);
     });
     const folders = () => (vscode.workspace.workspaceFolders || []).map((f) => f.uri.fsPath);
@@ -264,9 +162,9 @@ async function activate(context) {
       }),
       { dispose: () => { bridge.removeDiscovery(file); server.close(); } },
     );
-    output.appendLine(`listening for Claude Code permission prompts on 127.0.0.1:${port}`);
+    output.appendLine(`listening for Command Gate plugin events on 127.0.0.1:${port}`);
   } catch (err) {
-    output.appendLine(`could not start the hook listener: ${err.message}`);
+    output.appendLine(`could not start the Command Gate plugin listener: ${err.message}`);
   }
 
   // Opt-in feed for a chat webview that draws the card inside the chat (see src/chatcard.js).
