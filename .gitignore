@@ -25,3 +25,6 @@ runs/
 
 # Local tool settings
 .claude/settings.local.json
+
+# Download bookkeeping written by `python -m cmdgate.fetch_models`
+/.cache/

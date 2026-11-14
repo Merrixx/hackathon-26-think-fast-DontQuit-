@@ -3,6 +3,11 @@
     uv run --extra ml python -m cmdgate.engine                               # every model found on disk
     uv run --extra ml python -m cmdgate.engine --scorer ngram                # one model
     uv run --extra ml python -m cmdgate.engine --scorers ngram,encoder --endpoint kev=http://127.0.0.1:8011/v1/systemone
+    uv run --extra ml python -m cmdgate.engine --scorers rules,ngram-plus,enc-ens-qwen4 --default enc-ens-qwen4
+
+With no `--scorers` it loads the light models found on disk (rules, both n-gram
+models, the encoder). The large encoders under `models/enc-*` and their
+ensemble take 2 to 3 GB of memory each, so they are loaded only when named.
 
 `POST /v1/systemone` is the decision API. The default model answers a yes/no
 question with the probability that the command is risky and, when it has risk
@@ -11,10 +16,12 @@ question gets a uniform answer, which the evaluation runner scores as an
 unconfident guess.
 
 `POST /v1/check {"command": "...", "model": "ngram"}` is what the KI-Guard hook
-and dashboard call. It returns the probability, a verdict and each model's own
-probability. A model may allow a command on its own only inside the cut-offs
-measured for it by `cmdgate.evaluate` on the validation split; a model with no
-such result asks a person every time. `GET /v1/models` lists the models with
+and dashboard call. It returns the probability and verdict of the model asked,
+and each model's own probability and verdict (`"all": true` asks every loaded model). A model may allow a command on its own only inside the cut-offs
+measured for it by `cmdgate.evaluate` on the validation split, read from
+`results/` or, on a fresh checkout, from the copy frozen into
+`cmdgate/policy.json` by `cmdgate.policy`; a model with neither asks a person
+every time. `GET /v1/models` lists the models with
 their cut-offs and scores.
 """
 
@@ -32,9 +39,11 @@ from thinkfast.metrics import question_options, uniform
 
 from .encoder import MODEL_DIR as ENCODER_DIR
 from .ngram import MODEL_PATH as NGRAM_PATH
+from .policy import POLICY_PATH
 from .questions import LEVELS, command_from_state, risky_probability
 from .rules import matched_rules
-from .scorers import VOTE, VoteScorer, load_scorers, parse_endpoints, risky_scores
+from .scorers import (ENSEMBLES, MODELS_DIR, NGRAM_PLUS, VOTE, VoteScorer, in_process_names, load_scorers,
+                      parse_endpoints, risky_scores)
 
 RESULTS_DIR = Path("results")
 POLICY_SPLIT = "validation"
@@ -71,11 +80,17 @@ def decide(scorer: Any, body: dict[str, Any]) -> dict[str, Any]:
     return {"answers": answers}
 
 
-def load_policy(name: str, members: list[str], results_dir: Path) -> dict[str, Any]:
-    """The cut-offs the harness measured for a model on validation, or why it has none."""
+def load_policy(name: str, members: list[str], results_dir: Path, frozen: Path | None = None) -> dict[str, Any]:
+    """The cut-offs the harness measured for a model on validation, or why it has none.
+
+    A result file in `results_dir` wins. Without one, the entry frozen into `frozen` (cmdgate.policy) is used.
+    """
     path = results_dir / f"{name}_{POLICY_SPLIT}.json"
     try:
-        result = json.loads(path.read_text())
+        if path.exists() or frozen is None:
+            result = json.loads(path.read_text())
+        else:
+            result = json.loads(frozen.read_text())[name]
         confidence = float(result["automation_confidence"])
         metrics = result["metrics"]
     except (OSError, ValueError, KeyError, TypeError):
@@ -107,22 +122,25 @@ def verdict_for(p: float, policy: dict[str, Any]) -> tuple[str, str, str]:
 class Gate:
     """The loaded models, the vote over them, and the cut-offs the harness measured for each."""
 
-    def __init__(self, scorers: dict[str, Any], default: str | None = None, results_dir: Path = RESULTS_DIR) -> None:
+    def __init__(self, scorers: dict[str, Any], default: str | None = None, results_dir: Path = RESULTS_DIR,
+                 frozen: Path | None = None) -> None:
         if not scorers:
             raise ValueError("the gate needs at least one model")
         self.scorers = scorers
-        self.voters = sorted(name for name in scorers if name != "prior")
+        # An ensemble is left out of the vote: its members would be counted twice.
+        self.voters = sorted(name for name in scorers if name != "prior" and name not in ENSEMBLES)
         self.names = [*scorers, VOTE] if len(self.voters) > 1 else list(scorers)
         self.default = default or (VOTE if VOTE in self.names else self.names[0])
         if self.default not in self.names:
             raise ValueError(f"default model {self.default!r} is not one of {self.names}")
         self.results_dir = results_dir
+        self.frozen = frozen
 
     def scorer(self, name: str) -> Any:
         return VoteScorer({v: self.scorers[v] for v in self.voters}) if name == VOTE else self.scorers[name]
 
     def policy(self, name: str) -> dict[str, Any]:
-        return load_policy(name, self.voters if name == VOTE else [], self.results_dir)
+        return load_policy(name, self.voters if name == VOTE else [], self.results_dir, self.frozen)
 
     def models(self) -> dict[str, Any]:
         return {"default": self.default,
@@ -148,6 +166,8 @@ class Gate:
         if VOTE in self.names and (name == VOTE or body.get("all")):
             models[VOTE] = {"p": sum(models[v]["p"] for v in self.voters) / len(self.voters),
                             "ms": sum(models[v]["ms"] for v in self.voters)}
+        for member, answer in models.items():  # every model's own verdict, from its own cut-offs
+            answer["verdict"], answer["bucket"], answer["reason"] = verdict_for(answer["p"], self.policy(member))
         policy = self.policy(name)
         p = models[name]["p"]
         verdict, bucket, reason = verdict_for(p, policy)
@@ -201,14 +221,17 @@ def make_handler(scorer: Any, name: str, gate: Gate | None = None) -> type[BaseH
 
 def models_on_disk() -> list[str]:
     """The in-process models that can be loaded right now."""
-    return ["rules", *(["ngram"] if NGRAM_PATH.exists() else []), *(["encoder"] if ENCODER_DIR.exists() else [])]
+    return ["rules", *(["ngram"] if NGRAM_PATH.exists() else []),
+            *([NGRAM_PLUS] if (MODELS_DIR / "ngram_plus.joblib").exists() else []),
+            *(["encoder"] if ENCODER_DIR.exists() else [])]
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     which = parser.add_mutually_exclusive_group()
     which.add_argument("--scorer", help="serve one in-process model")
-    which.add_argument("--scorers", help="in-process models to serve, comma-separated; default: every one on disk")
+    which.add_argument("--scorers", help="in-process models to serve, comma-separated; default: the light ones on "
+                                         f"disk. Available now: {', '.join(in_process_names())}")
     parser.add_argument("--endpoint", action="append", default=[], metavar="NAME=URL",
                         help="also serve a model behind the decision API, such as Kev; repeatable")
     parser.add_argument("--default", help="model that answers when a request names none; default: the vote")
@@ -218,7 +241,7 @@ def main() -> None:
     args = parser.parse_args()
     names = [args.scorer] if args.scorer else args.scorers.split(",") if args.scorers else models_on_disk()
     try:
-        gate = Gate(load_scorers(names, parse_endpoints(args.endpoint)), args.default, args.results)
+        gate = Gate(load_scorers(names, parse_endpoints(args.endpoint)), args.default, args.results, POLICY_PATH)
     except ValueError as exc:
         parser.error(str(exc))
     server = ThreadingHTTPServer((args.host, args.port), make_handler(gate.scorer(gate.default), gate.default, gate))

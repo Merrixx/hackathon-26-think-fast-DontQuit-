@@ -9,11 +9,13 @@ from pathlib import Path
 
 from cmdgate.dataset import Command
 from cmdgate.encoder import fit_temperature, log_loss, softmax
-from cmdgate.engine import BadRequest, Gate, decide, make_handler, verdict_for
+from cmdgate.engine import BadRequest, Gate, decide, load_policy, make_handler, verdict_for
+from cmdgate.kev_data import partitions, record_for
 from cmdgate.evaluate import EndpointScorer, family_bootstrap, metrics, score_commands
 from cmdgate.questions import LEVEL_ID, RISKY_ID, request_for
 from cmdgate.rules import RulesScorer, fit_level_rates, matched_rules
-from cmdgate.scorers import VoteScorer, parse_endpoints
+from cmdgate import scorers
+from cmdgate.scorers import ENSEMBLES, VoteScorer, in_process_names, load_scorers, parse_endpoints, saved_encoders
 from thinkfast.run_eval import post_json, run
 
 RISKY = [
@@ -211,6 +213,128 @@ class TemperatureTest(unittest.TestCase):
 
     def test_softmax_sums_to_one(self):
         self.assertAlmostEqual(sum(softmax([2.0, -1.0, 0.5], 1.7)), 1.0)
+
+
+class KevDataTest(unittest.TestCase):
+    def test_a_record_is_the_served_request_with_labels(self):
+        command = Command("fam-bash-abc", "rm -rf /", 4, "destructive", "fam")
+        record = record_for(command, with_level=True)
+        self.assertEqual(record["questions"][RISKY_ID]["label"], True)
+        self.assertEqual(record["questions"][LEVEL_ID]["label"], 4)
+        for question in record["questions"].values():
+            question.pop("label")
+        self.assertEqual(record, request_for("rm -rf /", with_level=True))
+        self.assertNotIn("label", request_for("rm -rf /")["questions"][RISKY_ID])
+
+    def test_calibration_holds_out_whole_train_families(self):
+        train = [Command(f"f{i}-bash-{j}", f"cmd {i} {j}", 0, "x", f"f{i}") for i in range(200) for j in range(3)]
+        validation = [Command("v-bash-0", "other", 3, "x", "v")]
+        parts = partitions({"train": train, "validation": validation, "test": []}, 0.2)
+        held_out = {c.family for c in parts["calibration"]}
+        self.assertTrue(held_out)
+        self.assertFalse(held_out & {c.family for c in parts["train"]})
+        self.assertEqual(len(parts["train"]) + len(parts["calibration"]), len(train))
+        self.assertEqual(parts["development"], validation)
+
+
+class RegistryTest(unittest.TestCase):
+    def saved(self, root: Path, *names: str) -> None:
+        for name in names:
+            (root / name).mkdir()
+            (root / name / "cmdgate.json").write_text("{}")
+            (root / name / "model.safetensors").write_bytes(b"")
+
+    def test_an_encoder_folder_needs_its_weights_and_its_temperature(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.saved(root, "enc-a")
+            (root / "enc-half").mkdir()
+            (root / "enc-half" / "cmdgate.json").write_text("{}")
+            self.assertEqual(saved_encoders(root), ["enc-a"])
+
+    def test_an_ensemble_is_offered_only_when_every_member_is_on_disk(self):
+        name, members = next(iter(ENSEMBLES.items()))
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.saved(root, *members[:-1])
+            self.assertNotIn(name, in_process_names(root))
+            self.saved(root, members[-1])
+            self.assertIn(name, in_process_names(root))
+
+    def test_an_ensemble_reuses_members_that_are_already_loaded(self):
+        name, members = next(iter(ENSEMBLES.items()))
+        loaded: list[str] = []
+
+        def fake(member: str, train: list | None = None) -> object:
+            loaded.append(member)
+            return type("Fixed", (), {"risky": lambda self, command: 0.25})()
+
+        original = scorers.load_scorer
+        scorers.load_scorer = fake
+        try:
+            got = load_scorers([members[0], name], {})
+        finally:
+            scorers.load_scorer = original
+        self.assertEqual(sorted(loaded), sorted(members))
+        self.assertIs(got[name].members[members[0]], got[members[0]])
+        self.assertEqual(got[name].risky("ls"), 0.25)
+
+    def test_an_ensemble_is_not_a_voter(self):
+        name = next(iter(ENSEMBLES))
+        fixed = type("Fixed", (), {"risky": lambda self, command: 0.5})
+        gate = Gate({"a": fixed(), "b": fixed(), name: fixed()})
+        self.assertEqual(gate.voters, ["a", "b"])
+        self.assertIn(name, gate.names)
+
+
+class PerModelVerdictTest(unittest.TestCase):
+    def test_every_model_answers_with_its_own_verdict(self):
+        fixed = lambda p: type("Fixed", (), {"risky": lambda self, command: p})()  # noqa: E731
+        with tempfile.TemporaryDirectory() as tmp:
+            for name in ("calm", "wary"):
+                (Path(tmp) / f"{name}_validation.json").write_text(json.dumps(
+                    {"automation_confidence": 0.8, "members": [], "failed": 0, "metrics": {}}))
+            gate = Gate({"calm": fixed(0.05), "wary": fixed(0.95), "new": fixed(0.05)}, "calm", Path(tmp))
+            models = gate.check({"command": "ls", "all": True})["models"]
+        self.assertEqual(models["calm"]["verdict"], "allow")
+        self.assertEqual(models["wary"]["verdict"], "ask")
+        self.assertEqual(models["wary"]["bucket"], "likely")
+        self.assertEqual(models["new"]["verdict"], "ask")  # never evaluated, so it may not allow
+        self.assertIn("not evaluated", models["new"]["reason"])
+
+
+class FrozenPolicyTest(unittest.TestCase):
+    RESULT = {"automation_confidence": 0.8, "members": [], "failed": 0, "metrics": {"accuracy": 0.9}}
+
+    def test_a_frozen_cut_off_is_used_when_there_is_no_result_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            frozen = Path(tmp) / "policy.json"
+            frozen.write_text(json.dumps({"m": self.RESULT}))
+            self.assertTrue(load_policy("m", [], Path(tmp), frozen)["evaluated"])
+            self.assertFalse(load_policy("other", [], Path(tmp), frozen)["evaluated"])
+            self.assertFalse(load_policy("m", [], Path(tmp))["evaluated"])
+
+    def test_a_result_file_wins_over_the_frozen_cut_off(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            frozen = Path(tmp) / "policy.json"
+            frozen.write_text(json.dumps({"m": self.RESULT}))
+            (Path(tmp) / "m_validation.json").write_text(json.dumps({**self.RESULT, "automation_confidence": 0.6}))
+            self.assertEqual(load_policy("m", [], Path(tmp), frozen)["confidence"], 0.6)
+
+    def test_freezing_keeps_the_cut_off_and_fingerprints_the_weights(self):
+        from cmdgate import policy
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "m_validation.json").write_text(json.dumps(self.RESULT))
+            (root / "notes_validation.json").write_text(json.dumps({"unrelated": 1}))
+            weights = root / "w.bin"
+            weights.write_bytes(b"abc")
+            frozen = policy.freeze(root)
+            self.assertEqual(list(frozen), ["m"])
+            self.assertEqual(frozen["m"]["automation_confidence"], 0.8)
+            self.assertIsNone(frozen["m"]["weights_sha256"])
+            self.assertEqual(policy.fingerprint([weights]),
+                             "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
 
 
 if __name__ == "__main__":

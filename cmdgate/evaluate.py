@@ -31,8 +31,8 @@ from thinkfast.metrics import ERROR_BUDGET, Decision, automation_rate, summarize
 
 from .dataset import SPLITS, Command, load_all
 from .questions import LEVELS
-from .scorers import (IN_PROCESS, VOTE, EndpointScorer, VoteScorer, load_scorer, load_scorers, parse_endpoints,
-                      risky_scores)
+from .scorers import (VOTE, EndpointScorer, VoteScorer, in_process_names, load_scorer, load_scorers,
+                      parse_endpoints, risky_scores)
 
 HIGH = LEVELS.index("high")
 SAFE = LEVELS.index("safe")
@@ -112,7 +112,7 @@ def family_bootstrap(commands: list[Command], scores: list[float], level_probs: 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     source = parser.add_mutually_exclusive_group(required=True)
-    source.add_argument("--scorer", choices=(*IN_PROCESS, VOTE), help="a model run in this process")
+    source.add_argument("--scorer", choices=(*in_process_names(), VOTE), help="a model run in this process")
     source.add_argument("--endpoint", help="URL of an engine that serves the decision API")
     parser.add_argument("--name", help="name in the results file; required with --endpoint")
     parser.add_argument("--members", default="", help="for vote: in-process members, comma-separated")
