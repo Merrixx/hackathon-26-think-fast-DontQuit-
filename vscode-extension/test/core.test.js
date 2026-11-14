@@ -94,7 +94,8 @@ test("panel explains an app that did not answer, and an empty history", () => {
   assert.ok(renderPanel([], "x").includes("Waiting for a permission prompt"));
 });
 
-test("listener takes an event in the Claude Code plugin's format, with its answer", async () => {
+for (const source of ["Claude Code", "Cursor", "Codex"]) {
+test(`listener takes a ${source} plugin event with its answer`, async () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "cmdgate-"));
   const events = [];
   const { server, token, port } = await bridge.startListener((e) => events.push(e));
@@ -106,11 +107,12 @@ test("listener takes an event in the Claude Code plugin's format, with its answe
       const req = http.request({ host: "127.0.0.1", port: win.port, path: "/event", method: "POST",
         headers: { "content-type": "application/json", "x-cmdgate-token": win.token } },
       (res) => { res.resume(); resolve(res.statusCode); });
-      req.end(JSON.stringify({ source: "Claude Code", tool: "Bash", command: "git push --force origin main",
+      req.end(JSON.stringify({ source, tool: "Bash", command: "git push --force origin main",
         description: "Force-push main", result: ANSWER }));
     });
     assert.strictEqual(status, 202);
     assert.strictEqual(events.length, 1);
+    assert.strictEqual(events[0].source, source);
     assert.strictEqual(events[0].description, "Force-push main");
     assert.strictEqual(core.parseAnswers(events[0].result).risk.level, "critical");
   } finally {
@@ -119,6 +121,7 @@ test("listener takes an event in the Claude Code plugin's format, with its answe
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
+}
 
 test("listener refuses requests without the window token", async () => {
   const { server, port } = await bridge.startListener(() => assert.fail("must not be called"));

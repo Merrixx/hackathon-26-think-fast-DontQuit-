@@ -1,0 +1,7 @@
+{
+  "name": "cmdgate",
+  "version": "0.1.0",
+  "description": "An advisory second opinion on Codex CLI shell commands from your Command Gate backend.",
+  "license": "MIT",
+  "hooks": "./hooks/hooks.json"
+}
