@@ -2,6 +2,30 @@
 
 Our entry for the proximata track at **proximata Hackathon '26** (13–14 November 2026, Home of Innovation, Vienna), built on the track's starter kit. The brief and judging rules are in [CASE.md](CASE.md); our plan is in [PRD.md](PRD.md).
 
+## Try it
+
+The command gate reads one shell command an AI coding agent wants to run and decides whether a person should approve it first. It runs on your machine, and after the first download it works with the network off.
+
+```bash
+uv sync --extra ml
+git clone https://github.com/jaredpalmer/kev.git ../kev && git -C ../kev checkout 2074cc4 && (cd ../kev && uv sync --extra serve)
+uv run --extra ml python -m cmdgate.fetch_data --only cli-command-risk
+uv run --extra ml python -m cmdgate.fetch_models                 # Kev adapter, n-gram models, Kev's base model (about 1.8 GB)
+uv run --extra ml python -m cmdhook.setup                        # writes cmdhook/.env and prints the Claude Code hook entry
+```
+
+In `cmdhook/.env` set `CMDHOOK_MODELS=rules,ngram-plus,kev` and `CMDHOOK_KEV_RUN=runs/cmdrisk-08b-cap16-e1/checkpoint`, then:
+
+```bash
+uv run --extra ml python -m cmdhook.start                        # the backend, port 8019; it launches Kev too
+node cmdhook/hook.js check "git push --force origin main"        # the decision and every model's risk for one command
+cd ki-guard && npm start                                         # the dashboard, http://127.0.0.1:8049/
+```
+
+- **Claude Code hook:** paste the entry `cmdhook.setup` printed into `.claude/settings.json` ([cmdhook/README.md](cmdhook/README.md)).
+- **Plugins:** [Claude Code](cmdgate-claude-plugin/README.md), [Cursor](cmdgate-cursor-plugin/README.md) and [Codex](cmdgate-codex-plugin/README.md) show the backend's decision and every model's result under the permission prompt.
+- **Models:** the weights are in a public Hugging Face repo, [felixuhmann/cmdgate-models](https://huggingface.co/felixuhmann/cmdgate-models); no login is needed.
+
 ## Our project: local yes/no tagging with Kev and Adaption
 
 The tool is offline and answers one yes/no question per record. It tags the records it is confident about automatically and sends the rest to a review queue, keeping wrong automatic tags within **1%** per tag.
@@ -105,7 +129,7 @@ uv run --extra ml python -m cmdgate.evaluate --endpoint http://127.0.0.1:8011/v1
 
 ### Models: fetch instead of training
 
-The trained weights are not in git. They sit in one private Hugging Face model repo, pinned by revision in `cmdgate/models.json`; log in once with `uv run --extra ml hf auth login` (a token with access to that repo).
+The trained weights are not in git. They sit in one public Hugging Face model repo, [felixuhmann/cmdgate-models](https://huggingface.co/felixuhmann/cmdgate-models), pinned by revision in `cmdgate/models.json`. No login is needed.
 
 ```bash
 uv run --extra ml python -m cmdgate.fetch_models          # Kev adapter, both n-gram models, and Kev's base model into the local cache (about 1.8 GB)
@@ -116,23 +140,16 @@ git clone https://github.com/jaredpalmer/kev.git ../kev && git -C ../kev checkou
 
 Each model's allow and ask cut-offs are frozen in `cmdgate/policy.json`, so nothing has to be measured after a fetch. After retraining a model, run `cmdgate.evaluate` for it and then `uv run --extra ml python -m cmdgate.policy` to freeze the new cut-off; `--publish <account>/<repo>` on `cmdgate.fetch_models` uploads new weights and repins the revision.
 
-Start Kev and the backend with Kev as the default model. With the base model cached, both run with the network off:
+Start everything with the hook backend, which loads the models set in `cmdhook/.env`, launches Kev and serves the hook, the plugins and the dashboard on port 8019 (see [Try it](#try-it) and [cmdhook/README.md](cmdhook/README.md)):
 
 ```bash
-(cd ../kev && HF_HUB_OFFLINE=1 uv run --extra serve python -m kev.serve --run "$OLDPWD/runs/cmdrisk-08b-cap16-e1/checkpoint" --port 8011)
-uv run --extra ml python -m cmdgate.engine --endpoint kev=http://127.0.0.1:8011/v1/systemone --default kev
-```
-
-`--scorers` picks the in-process models by name: `rules`, `ngram`, `ngram-plus`, `encoder`, the fine-tuned encoders `enc-mbl-cap8`, `enc-qwenc-cap8`, `enc-qwenc-cap8-s1`, `enc-qwenc-cap8-s2`, `enc-qwen-cap8`, and `enc-ens-qwen4`, the mean of the four Qwen ones. Without it the backend loads the light ones (rules, both n-gram models, the encoder); the large encoders take 2 to 3 GB of memory each. `POST /v1/check` with `"all": true` returns every loaded model's probability and its own verdict.
-
-### Hook and dashboard
-
-```bash
-uv run --extra ml python -m cmdgate.engine      # model backend on port 8009: every model found on disk, plus their vote
+uv run --extra ml python -m cmdhook.start
 cd ki-guard && npm start                        # dashboard on http://127.0.0.1:8049/
 ```
 
-[KI-Guard](ki-guard/README.md) is the frontend: a hook for coding agents and a dashboard. It has no model of its own. For every command it calls the backend's `POST /v1/check`, and the backend answers with the models listed above. A model may allow a command on its own only inside the cut-off `cmdgate.evaluate` measured for it on validation (`results/<model>_validation.json`); a model without that file asks a person every time, and so does the `vote` unless it was evaluated with the same members the backend serves. The dashboard's "Eval harness" card shows every `results/<name>_<split>.json` side by side.
+The models by name, for `CMDHOOK_MODELS`: `rules`, `ngram`, `ngram-plus`, `encoder`, `kev`, and the fine-tuned encoders `enc-mbl-cap8`, `enc-qwenc-cap8`, `enc-qwenc-cap8-s1`, `enc-qwenc-cap8-s2`, `enc-qwen-cap8` (2 to 3 GB of memory each). [KI-Guard](ki-guard/README.md) is the dashboard: a frontend only, it shows what the backend answers.
+
+`cmdgate.engine` is the evaluation backend: it serves one or more models behind the decision API on port 8009 for `thinkfast.run_eval` and `cmdgate.evaluate --endpoint`, with the cut-offs frozen in `cmdgate/policy.json`. The hook, the plugins and the dashboard do not use it.
 
 ### Fine-tuning Kev on a cloud GPU
 
