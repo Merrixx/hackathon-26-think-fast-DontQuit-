@@ -1,36 +1,94 @@
 /* Tailwind input for dashboard.html.
    Build: npm run build:css  ->  the result is written into the <style> block of dashboard.html,
-   so the page stays one self-contained file and the server needs no extra route. */
+   so the page stays one self-contained file and the server needs no extra route.
+   Look: dark mission-control HUD (warm black, film grain, wireframe globe, mono type, chrome headline).
+   Silver only; colour appears only as the soft status glow (stop / ask / safe). */
 @import "tailwindcss" source(none);
 @source "../dashboard.html";
 
 @theme static {
-  --font-sans: "Segoe UI Variable", "Segoe UI", Inter, system-ui, sans-serif;
-  --font-mono: Consolas, monospace;
-  --color-ink: #1d1d1f; --color-sub: rgba(0,0,0,.52);
-  --color-card: rgba(255,255,255,.55); --color-foot: rgba(0,0,0,.05); --color-hov: rgba(0,0,0,.08);
-  --color-b0: #1d1d1f; --color-b1: #48484d; --color-b2: #76767b; --color-b3: #a1a1a6; --color-b4: #c7c7cc;
-  --shadow-card: 0 10px 40px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+  --font-sans: "Cascadia Mono", "JetBrains Mono", "SF Mono", Consolas, monospace;
+  --font-mono: "Cascadia Mono", "JetBrains Mono", "SF Mono", Consolas, monospace;
+  --font-display: "Segoe UI Variable Display", "Segoe UI", Inter, system-ui, sans-serif;
+  --color-ink: #e8e6e2; --color-sub: rgba(232,230,226,.52);
+  --color-card: rgba(30,29,27,.78); --color-foot: rgba(255,255,255,.05); --color-hov: rgba(255,255,255,.1);
+  --color-b0: #f4f3f1; --color-b1: #bdbbb7; --color-b2: #8d8b87; --color-b3: #63615e; --color-b4: #44423f;
+  --color-stop: #f2555a; --color-ask: #f0b429; --color-safe: #3ecf8e;
+  --shadow-card: 0 18px 50px rgba(0,0,0,.45), 0 1px 0 rgba(255,255,255,.04) inset;
 }
 
 @layer base {
-  html { background: #fff; }
+  html { background: #1a1917; color-scheme: dark; }
   body {
-    margin: 0; min-height: 100vh; color: var(--color-ink); font: 13px/1.45 var(--font-sans);
-    background: radial-gradient(900px 600px at 15% 0%, #eef0f4 0%, transparent 60%), radial-gradient(800px 600px at 100% 100%, #f1eff4 0%, transparent 60%), #fff;
+    margin: 0; min-height: 100vh; color: var(--color-ink); font: 13px/1.5 var(--font-sans);
+    background:
+      radial-gradient(1100px 700px at 80% -10%, rgba(255,255,255,.07), transparent 60%),
+      radial-gradient(900px 700px at -10% 110%, rgba(255,255,255,.04), transparent 60%),
+      #1a1917;
   }
+  /* static film grain over everything (no animation) */
+  body::after {
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 50; opacity: .09; mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .9 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  ::selection { background: rgba(255,255,255,.22); }
   /* keep browser defaults the page was designed with */
   svg { display: inline; vertical-align: baseline; }
   th, td { padding: 1px; }
-  svg text { fill: var(--color-ink); font: 12px "Segoe UI", sans-serif; }
+  svg text { fill: var(--color-ink); font: 11px var(--font-mono); }
 }
 
-/* 1-px glass edge: light at top and bottom, dark in the middle */
+/* thin HUD edge: brighter at the top, faint below, plus silver corner brackets */
 @utility glass-edge {
   position: relative; isolation: isolate;
   &::before {
     content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px; pointer-events: none;
-    background: linear-gradient(180deg,rgba(255,255,255,.95) 0%,rgba(255,255,255,.6) 20%,rgba(0,0,0,.07) 35%,rgba(0,0,0,.05) 65%,rgba(255,255,255,.6) 80%,rgba(255,255,255,.95) 100%);
+    background: linear-gradient(180deg,rgba(255,255,255,.26) 0%,rgba(255,255,255,.1) 30%,rgba(255,255,255,.06) 70%,rgba(255,255,255,.14) 100%);
     -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude;
   }
 }
+@utility hud {
+  &::after {
+    content: ""; position: absolute; inset: -4px; pointer-events: none;
+    background:
+      linear-gradient(var(--color-b1),var(--color-b1)) 0 0/10px 1px, linear-gradient(var(--color-b1),var(--color-b1)) 0 0/1px 10px,
+      linear-gradient(var(--color-b1),var(--color-b1)) 100% 0/10px 1px, linear-gradient(var(--color-b1),var(--color-b1)) 100% 0/1px 10px,
+      linear-gradient(var(--color-b1),var(--color-b1)) 0 100%/10px 1px, linear-gradient(var(--color-b1),var(--color-b1)) 0 100%/1px 10px,
+      linear-gradient(var(--color-b1),var(--color-b1)) 100% 100%/10px 1px, linear-gradient(var(--color-b1),var(--color-b1)) 100% 100%/1px 10px;
+    background-repeat: no-repeat; opacity: .55;
+  }
+}
+/* chrome headline: silver metal gradient */
+@utility chrome {
+  font-family: var(--font-display);
+  background: linear-gradient(180deg,#ffffff 0%,#d9d7d3 38%,#7d7b77 52%,#cfcdc9 66%,#f4f3f1 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 2px 14px rgba(255,255,255,.08));
+}
+/* the glowing status orb (same as the chat card): ! stop, ? ask, check safe */
+@utility orb {
+  display: grid; place-items: center; border-radius: 9999px; color: #121110; font-weight: 800; flex: none;
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--c) 55%, #fff), var(--c) 55%, color-mix(in srgb, var(--c) 70%, #000));
+  box-shadow: 0 0 22px color-mix(in srgb, var(--c) 55%, transparent), 0 0 60px color-mix(in srgb, var(--c) 22%, transparent), inset 0 1px 1px rgba(255,255,255,.45);
+}
+/* a card that glows softly in its status colour */
+@utility glow {
+  background:
+    radial-gradient(110% 130% at 0% 0%, color-mix(in srgb, var(--c) 26%, transparent), transparent 60%),
+    radial-gradient(90% 120% at 100% 100%, color-mix(in srgb, var(--c) 10%, transparent), transparent 70%),
+    var(--color-card);
+}
+
+/* details: height and opacity ease open instead of popping in */
+.fold { display: grid; grid-template-rows: 0fr; opacity: 0; translate: 0 10px; visibility: hidden;
+  transition: grid-template-rows .5s cubic-bezier(.2,.8,.2,1), opacity .35s ease, translate .5s cubic-bezier(.2,.8,.2,1), visibility 0s .5s; }
+.fold > * { min-height: 0; overflow: hidden; }
+.fold.open { grid-template-rows: 1fr; opacity: 1; translate: 0 0; visibility: visible;
+  transition: grid-template-rows .5s cubic-bezier(.2,.8,.2,1), opacity .4s ease .08s, translate .5s cubic-bezier(.2,.8,.2,1), visibility 0s; }
+#more i { display: inline-block; font-style: normal; transition: rotate .3s ease; }
+#more[aria-expanded="true"] i { rotate: 180deg; }
+
+/* tooltip sits above (or below) the hovered thing, never on top of it */
+#tip::after { content: ""; position: absolute; left: var(--ax, 50%); width: 9px; height: 9px; translate: -50% 0; rotate: 45deg;
+  background: inherit; border: inherit; border-top: 0; border-left: 0; bottom: -5.5px; }
+#tip.below::after { bottom: auto; top: -5.5px; rotate: 225deg; }
