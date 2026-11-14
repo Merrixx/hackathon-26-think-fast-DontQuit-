@@ -7,19 +7,22 @@
 @source "../dashboard.html";
 
 @theme static {
-  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", Inter, system-ui, sans-serif;
-  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI Variable Display", "Segoe UI", Inter, system-ui, sans-serif;
+  --font-sans: "Segoe UI Variable Text", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Inter, system-ui, sans-serif;
+  --font-display: "Segoe UI Variable Display", -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Inter, system-ui, sans-serif;
   --font-mono: "SF Mono", "Cascadia Mono", Consolas, monospace;
-  --color-ink: #1d1d1f; --color-sub: #6e6e73;
-  --color-card: #ffffff; --color-foot: rgba(0,0,0,.05); --color-hov: rgba(0,0,0,.08); --color-soft: #f5f5f7;
-  --color-b0: #1d1d1f; --color-b1: #48484d; --color-b2: #76767b; --color-b3: #a1a1a6; --color-b4: #c7c7cc;
-  --color-stop: #f2555a; --color-ask: #f0b429; --color-safe: #3ecf8e;
-  --shadow-card: 0 4px 24px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+  --color-ink: #1a1718; --color-sub: #7a7a7a; --color-line: #e8e8e8;
+  --color-card: #ffffff; --color-foot: transparent; --color-hov: rgba(26,23,24,.05); --color-soft: #f3f2f3;
+  --color-b0: #1a1718; --color-b1: #373737; --color-b2: #7a7a7a; --color-b3: #a9bad1; --color-b4: #c4c4c4;
+  --color-stop: #d9534f; --color-ask: #d9a520; --color-safe: #3d9c70;
+  --color-iri-blue: #4986b4; --color-iri-lav: #a9bad1; --color-iri-rose: #daa7d2;
+  /* hairline instead of a drop shadow */
+  --shadow-card: 0 0 0 1px #e8e8e8;
 }
 
 @layer base {
-  html { background: #fbfbfd; scroll-behavior: smooth; }
-  body { margin: 0; min-height: 100vh; color: var(--color-ink); font: 15px/1.47 var(--font-sans); letter-spacing: -.01em; background: #fbfbfd; -webkit-font-smoothing: antialiased; }
+  html { background: #fafafa; scroll-behavior: smooth; }
+  body { margin: 0; min-height: 100vh; color: var(--color-ink); font: 300 15px/1.5 var(--font-sans); letter-spacing: -.005em; background: #fafafa; -webkit-font-smoothing: antialiased; }
+  b, strong { font-weight: 500; }
   ::selection { background: rgba(0,0,0,.12); }
   /* keep browser defaults the page was designed with */
   svg { display: inline; vertical-align: baseline; }
@@ -27,29 +30,35 @@
   svg text { fill: var(--color-ink); font: 12px var(--font-sans); }
 }
 
-/* hairline glass edge, light at top and bottom */
-@utility glass-edge {
-  position: relative; isolation: isolate;
-  &::before {
-    content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px; pointer-events: none;
-    background: linear-gradient(180deg,rgba(255,255,255,.95) 0%,rgba(0,0,0,.05) 35%,rgba(0,0,0,.04) 65%,rgba(255,255,255,.9) 100%);
-    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude;
-  }
-}
-@utility display { font-family: var(--font-display); letter-spacing: -.025em; }
-/* the glowing status orb (same as the chat card): ! stop, ? ask, check safe */
+/* outline pill: hairline border, no fill (like the reference's secondary buttons) */
+@utility glass-edge { box-shadow: inset 0 0 0 1px rgba(26,23,24,.55); }
+@utility display { font-family: var(--font-display); font-weight: 300; letter-spacing: -.03em; }
+/* small mono label in caps, used above headlines */
+@utility kicker { font: 400 11px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--color-sub); }
+/* status mark: a small solid dot with a faint halo, no gloss */
 @utility orb {
-  display: grid; place-items: center; border-radius: 9999px; color: #fff; font-weight: 700; flex: none; font-family: var(--font-display);
-  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--c) 55%, #fff), var(--c) 55%, color-mix(in srgb, var(--c) 78%, #000));
-  box-shadow: 0 0 22px color-mix(in srgb, var(--c) 45%, transparent), 0 0 60px color-mix(in srgb, var(--c) 18%, transparent), inset 0 1px 1px rgba(255,255,255,.55);
-  text-shadow: 0 1px 2px rgba(0,0,0,.18);
+  display: inline-block; flex: none; border-radius: 9999px; background: var(--c);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--c) 14%, transparent);
 }
-/* a white card with a soft status-coloured glow in one corner */
+/* white card with a hairline and a whisper of the status colour in one corner */
 @utility glow {
   background:
-    radial-gradient(90% 120% at 0% 0%, color-mix(in srgb, var(--c) 14%, transparent), transparent 62%),
+    radial-gradient(70% 90% at 0% 0%, color-mix(in srgb, var(--c) 7%, transparent), transparent 60%),
     #fff;
 }
+/* iridescent chrome aura behind the hero (static, no animation) */
+.aura { position: absolute; left: 50%; bottom: -60px; width: 1100px; max-width: 100vw; height: 420px; translate: -50% 0; z-index: -1; pointer-events: none; overflow: hidden;
+  -webkit-mask: radial-gradient(50% 50% at 50% 55%, #000 25%, transparent 100%); mask: radial-gradient(50% 50% at 50% 55%, #000 25%, transparent 100%); }
+.aura::before { content: ""; position: absolute; left: 50%; top: 60px; width: 900px; height: 300px; translate: -50% 0; border-radius: 50%;
+  background: conic-gradient(from 200deg at 50% 60%, #fafafa, #a9bad1, #4986b4, #373737, #daa7d2, #ffffff, #4986b4, #a9bad1, #fafafa);
+  filter: blur(46px) saturate(1.1); opacity: .55; }
+/* details band: sky-blue fade into the page with a faint grid, like the reference's second section */
+.band { background:
+    linear-gradient(rgba(26,23,24,.035) 1px, transparent 1px) 0 0 / 32px 32px,
+    linear-gradient(90deg, rgba(26,23,24,.035) 1px, transparent 1px) 0 0 / 32px 32px,
+    linear-gradient(180deg, #fafafa 0%, #c8e9fa 14%, #e7f7ff 34%, #fafafa 60%); }
+/* gradient headline accent */
+.iri { background: linear-gradient(82deg, #1a1718 10%, #4986b4 55%, #daa7d2 95%); -webkit-background-clip: text; background-clip: text; color: transparent; }
 
 /* details: height and opacity ease open instead of popping in */
 .fold { display: grid; grid-template-rows: 0fr; opacity: 0; translate: 0 14px; visibility: hidden;
