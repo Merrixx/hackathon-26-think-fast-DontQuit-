@@ -1,10 +1,10 @@
 // Command Gate for Claude Code: when Claude Code is about to ask you to approve
 // a shell command, ask the local Command Gate app about it and show the answer
-// as a line under the permission dialog. It never changes the decision: the
+// in the transcript and under the permission dialog. It never changes the decision: the
 // verdict beneath is returned as it came, whatever the app says or if it fails.
 
 import type { EngineInterface, Register } from 'claude-code'
-import { buildRequest, noticeLine, offlineLine, parseAnswers } from './gate.ts'
+import { buildRequest, noticeLine, offlineBlock, offlineLine, parseAnswers, transcriptBlock } from './gate.ts'
 
 type Options = { endpoint: string; model: string; timeoutMs: number; threshold: number; forwardToIde: boolean }
 
@@ -59,12 +59,22 @@ export const register: Register = (on, options) => {
     }
     let body: unknown = null
     let line: string
+    let block: string
     try {
       body = await askApp($, o, command)
-      line = noticeLine(parseAnswers(body, o.threshold))
+      const opinion = parseAnswers(body, o.threshold)
+      line = noticeLine(opinion)
+      block = transcriptBlock(opinion)
     } catch (err) {
-      line = offlineLine(o.endpoint, err instanceof Error ? err.message : String(err))
+      const reason = err instanceof Error ? err.message : String(err)
+      line = offlineLine(o.endpoint, reason)
+      block = offlineBlock(o.endpoint, reason)
     }
+    // Some permission dialogs do not paint ui.notice; keep the evaluation
+    // visible in the transcript as well, without sending it to the model.
+    // ui.log accepts one line per call. Embedded line endings can be drawn
+    // as replacement characters by the CLI's system-notice renderer.
+    for (const row of block.split(/\r\n?|\n/)) $.ui.log(row)
     $.ui.notice(e.tool_use_id, line)
     if (o.forwardToIde) {
       await forwardToIdes($, { source: 'Claude Code', tool: e.tool, command,

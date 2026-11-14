@@ -1,7 +1,7 @@
 # Demo: Command Gate with fake data
 
 How to show Command Gate without the real backend: the line under Claude Code's
-permission prompt ([Claude Code plugin](../cmdgate-plugin/README.md)) and the card in
+permission prompt ([Claude Code plugin](../cmdgate-claude-plugin/README.md)) and the card in
 VS Code ([add-on](README.md)). Everything it displays in this demo comes
 from [`demo/mock-app.js`](demo/mock-app.js): fake, keyword-based answers. Fine for showing
 how it works; never report them as model results.
@@ -41,7 +41,7 @@ critical. Then try `ls -la` ("Looks safe to run"); the first check moves to *Ear
    your checkout, **in default mode** (replace `<repo>` with where you cloned this repository):
    ```
    cd ~/cmdgate-demo
-   claude --plugin-dir <repo>/cmdgate-plugin --permission-mode default
+   claude --plugin-dir <repo>/cmdgate-claude-plugin --permission-mode default
    ```
    Default mode matters: in auto mode or bypass mode Claude Code never shows a permission
    prompt, so there is nothing to give a second opinion on. (If the plugin is installed
@@ -70,7 +70,7 @@ critical. Then try `ls -la` ("Looks safe to run"); the first check moves to *Ear
 - **"Gate: app offline" / "No second opinion":** the fake app isn't running, or isn't on
   port 8009.
 - **No line under a Claude prompt:** make sure Claude actually showed a prompt (default mode,
-  and the command isn't already allowed) and that it was started with `--plugin-dir cmdgate-plugin`.
+  and the command isn't already allowed) and that it was started with `--plugin-dir cmdgate-claude-plugin`.
   `claude --debug` logs why a plugin hook was skipped.
 - **Line shows but no card in VS Code:** the dev-host window must be open, and the plugin's
   `forwardToIde` setting on (default). **Output → Command Gate** in that window logs every check.

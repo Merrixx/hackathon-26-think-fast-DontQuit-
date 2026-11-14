@@ -100,7 +100,7 @@ test("listener takes an event in the Claude Code plugin's format, with its answe
   const { server, token, port } = await bridge.startListener((e) => events.push(e));
   const file = bridge.writeDiscovery({ port, token, folders: [], home });
   try {
-    // What cmdgate-plugin/hooks/register.ts sends: it reads the discovery file for port and token.
+    // What cmdgate-claude-plugin/hooks/register.ts sends: it reads the discovery file for port and token.
     const win = JSON.parse(fs.readFileSync(file, "utf8"));
     const status = await new Promise((resolve) => {
       const req = http.request({ host: "127.0.0.1", port: win.port, path: "/event", method: "POST",

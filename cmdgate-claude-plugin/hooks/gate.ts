@@ -82,6 +82,39 @@ export function noticeLine(o: Opinion): string {
   return `Command Gate: ${verdict} · risk ${risk} · dangerous ${yesNo(o.dangerous)} · root ${yesNo(o.root)}`
 }
 
+// Transcript logs are plain text, so use line breaks and coloured Unicode
+// markers rather than ANSI escapes, which the host may strip or reject.
+const RISK_MARKERS = ['🟢', '🔵', '🟡', '🟠', '🔴'] as const
+
+function row(label: string, marker: string, value: string, p?: number): string {
+  const percent = p === undefined ? '' : pct(p).padStart(4)
+  return `  ${label.padEnd(11)}${marker} ${value.padEnd(10)}${percent}`.trimEnd()
+}
+
+function yesNoRow(label: string, value: YesNo): string {
+  return value
+    ? row(label, value.yes ? '🔴' : '🟢', value.yes ? 'yes' : 'no', value.p)
+    : row(label, '⚪', 'n/a')
+}
+
+export function transcriptBlock(o: Opinion): string {
+  return [
+    'Command Gate',
+    o.verdict
+      ? row('Verdict', o.verdict.yes ? '🔴' : '🟢', o.verdict.yes ? 'UNSAFE' : 'safe')
+      : row('Verdict', '⚪', 'n/a'),
+    o.risk
+      ? row('Risk', RISK_MARKERS[o.risk.index] ?? '⚪', o.risk.level, o.risk.p)
+      : row('Risk', '⚪', 'n/a'),
+    yesNoRow('Dangerous', o.dangerous),
+    yesNoRow('Root', o.root),
+  ].join('\n')
+}
+
 export function offlineLine(endpoint: string, reason: string): string {
   return `Command Gate: no second opinion from ${endpoint} (${reason})`
+}
+
+export function offlineBlock(endpoint: string, reason: string): string {
+  return ['Command Gate', '  ⚠ no second opinion', `  ${endpoint}`, `  ${reason}`].join('\n')
 }

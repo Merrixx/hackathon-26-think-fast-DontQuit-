@@ -4,7 +4,7 @@
 //
 // Where commands come from:
 //   - Claude Code permission prompts, forwarded by the Command Gate Claude Code
-//     plugin (cmdgate-plugin/) together with the app's answer: only commands an
+//     plugin (cmdgate-claude-plugin/) together with the app's answer: only commands an
 //     agent asks you to approve, nothing that already ran
 //   - the "Check command" and "Check selection" commands, which ask the app directly
 // The add-on never approves, denies or blocks anything; it only shows the result.
