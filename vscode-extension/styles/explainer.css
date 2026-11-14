@@ -1,0 +1,25 @@
+/* Tailwind input for the browser explainer (demo/explainer.html).
+   Build: npm run build:css  ->  demo/explainer.css (committed, the page needs no build to open). */
+@import "tailwindcss" source(none);
+@source "../demo/explainer.html";
+
+@theme static {
+  --font-sans: "Segoe UI", system-ui, sans-serif;
+  --font-mono: Consolas, "Cascadia Mono", monospace;
+  --color-bg: #0b0c0e; --color-ink: #eceef1; --color-ink2: #a9adb3; --color-ink3: #7c8188;
+  --color-glass: rgba(255,255,255,.06); --color-glass2: rgba(255,255,255,.1);
+  --color-risk: #f0b429;
+}
+
+/* Page backdrop: soft silver light, fixed while the page scrolls */
+@utility page-glow {
+  background: radial-gradient(70% 50% at 20% 0%, #30333a, transparent 70%), radial-gradient(60% 50% at 100% 100%, #1f2126, transparent 70%), var(--color-bg);
+  background-attachment: fixed;
+}
+/* The 1 px liquid-glass edge: light at top and bottom, dark in the middle */
+@utility glass-edge {
+  position: relative;
+  &::before { content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px; pointer-events: none;
+    background: linear-gradient(180deg, rgba(255,255,255,.34), rgba(255,255,255,.06) 45%, rgba(255,255,255,.06) 55%, rgba(255,255,255,.24));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
+}

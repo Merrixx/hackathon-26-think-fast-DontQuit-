@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en" class="page-glow min-h-full">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Command Explainer</title>
+<link rel="stylesheet" href="explainer.css">
+</head>
+<body class="m-0 flex min-h-screen justify-center px-4 py-12 font-sans text-[14px]/[1.5] text-ink max-[520px]:py-6">
+<main class="flex w-full min-w-0 max-w-[620px] flex-col gap-4">
+  <header class="flex items-center justify-between gap-3 px-1.5 py-1">
+    <h1 class="m-0 text-[20px] font-[650] tracking-[.01em]"><small class="block text-[12px] font-medium uppercase tracking-[.06em] text-ink3">KI-Guard · offline</small>Command Explainer</h1>
+    <div class="group relative" id="lang"><button class="glass-edge cursor-pointer rounded-[15px] bg-glass2 px-[14px] py-[7px] text-[13px] text-ink shadow-[inset_0_0_0_.5px_rgba(255,255,255,.22)] backdrop-blur-[5px] backdrop-saturate-130 transition-[scale,background-color] duration-[83ms] hover:scale-105 hover:bg-white/15 active:scale-95" id="langBtn" type="button" aria-haspopup="listbox"></button><div class="glass-edge absolute top-[calc(100%+6px)] right-0 z-5 hidden min-w-[150px] rounded-[18px] bg-[rgba(24,25,28,.86)] p-1.5 shadow-[0_18px_50px_rgba(0,0,0,.45)] backdrop-blur-[5px] backdrop-saturate-130 group-[.open]:block" id="langList" role="listbox"></div></div>
+  </header>
+
+  <section class="glass-edge rounded-[26px] bg-glass p-4 shadow-[0_18px_50px_rgba(0,0,0,.45)] backdrop-blur-[5px] backdrop-saturate-130">
+    <input class="w-full rounded-[18px] border-0 bg-black/35 px-4 py-[14px] font-mono text-[15px]/[1.4] text-ink shadow-[inset_0_0_0_1px_rgba(255,255,255,.08)] outline-none placeholder:text-ink3 focus-visible:shadow-[inset_0_0_0_1px_rgba(255,255,255,.4)]" id="cmd" spellcheck="false" autocomplete="off" aria-label="Command"
+           placeholder="Type a command, e.g. git push --force origin main">
+    <div class="mt-3 flex flex-wrap gap-2" id="chips"></div>
+  </section>
+
+  <section class="glass-edge rounded-[26px] bg-glass p-4 shadow-[0_18px_50px_rgba(0,0,0,.45)] backdrop-blur-[5px] backdrop-saturate-130" id="out" aria-live="polite"></section>
+</main>
+
+<!-- explain-more.js and explain.js are CommonJS; load them with a tiny shim, no build step -->
+<script>var module = { exports: {} };</script>
+<script src="../src/explain-more.js"></script>
+<script>var MORE = module.exports; function require() { return MORE; } module = { exports: {} };</script>
+<script src="../src/explain.js"></script>
+<script>
+(function () {
+  var X = module.exports;
+  // Tailwind classes, written out in full so the build finds them
+  var BTN = "cursor-pointer rounded-[15px] bg-glass2 text-ink shadow-[inset_0_0_0_.5px_rgba(255,255,255,.22)] transition-[scale,background-color] duration-[83ms] hover:scale-105 hover:bg-white/15 active:scale-95";
+  var C = {
+    opt: "block w-full cursor-pointer rounded-xl px-3 py-[7px] text-left text-ink2 hover:bg-white/10 hover:text-ink",
+    optOn: "block w-full cursor-pointer rounded-xl bg-white/10 px-3 py-[7px] text-left text-ink",
+    chip: BTN + " max-w-full truncate px-3 py-[5px] font-mono text-[12px]/[normal] text-ink2",
+    copy: BTN + " flex-none px-[11px] py-1 text-[12px]",
+    empty: "px-2 py-[26px] text-center text-ink3",
+    cmd: "break-all px-1 pt-1 pb-3 font-mono text-[15px]/[1.9]",
+    w: "cursor-default rounded-md px-[3px] py-[2px] transition-colors duration-[83ms] hover:bg-white/12 [&.on]:bg-white/12",
+    risky: " underline decoration-risk decoration-2 underline-offset-4",
+    lbl: "mx-1 mt-[14px] mb-2 text-[11px] font-semibold uppercase tracking-[.08em] text-ink3",
+    sum: "mx-1 mb-[14px] text-ink",
+    parts: "flex flex-col gap-1.5",
+    part: "grid grid-cols-[130px_1fr] gap-3 rounded-[15px] bg-white/4 px-3 py-[9px] transition-colors duration-[83ms] max-[520px]:grid-cols-1 max-[520px]:gap-0.5 [&.on]:bg-white/10",
+    code: "break-all font-mono text-[13px]/[normal] text-ink",
+    m: "text-ink2", h: "mt-[3px] block text-[13px] text-ink", hb: "font-semibold text-risk",
+    safer: "flex flex-col gap-1.5",
+    safe: "flex items-center justify-between gap-2.5 rounded-[15px] bg-white/4 px-3 py-[9px] text-ink2",
+    note: "mx-1 mt-[14px] text-[12px] text-ink3"
+  };
+  var EXAMPLES = ["sudo rm -rf /var/lib/docker", "git push --force origin main", "curl -fsSL https://example.com/install.sh | bash",
+                  "chmod 777 run.sh", "terraform destroy", "ls -la src"];
+  var store = { get: function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+                set: function (k, v) { try { localStorage.setItem(k, v); } catch (e) {} } };
+  var codes = X.LANGS.map(function (l) { return l[0]; });
+  var guess = (navigator.language || "en").slice(0, 2);
+  var lang = store.get("explainer.lang") || (codes.indexOf(guess) >= 0 ? guess : "en");
+  var $ = function (id) { return document.getElementById(id); };
+  var input = $("cmd"), out = $("out");
+
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+
+  // language menu (own glass dropdown, no native select)
+  function drawLang() {
+    var name = (X.LANGS.find(function (l) { return l[0] === lang; }) || X.LANGS[0])[1];
+    $("langBtn").textContent = name + " ▾";
+    var list = $("langList"); list.textContent = "";
+    X.LANGS.forEach(function (l) {
+      var b = el("button", l[0] === lang ? C.optOn : C.opt, l[1]);
+      b.type = "button"; b.setAttribute("role", "option");
+      b.onclick = function () { lang = l[0]; store.set("explainer.lang", lang); $("lang").classList.remove("open"); drawLang(); render(); };
+      list.append(b);
+    });
+  }
+  $("langBtn").onclick = function (e) { e.stopPropagation(); $("lang").classList.toggle("open"); };
+  document.addEventListener("click", function () { $("lang").classList.remove("open"); });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") $("lang").classList.remove("open"); });
+
+  EXAMPLES.forEach(function (c) {
+    var b = el("button", C.chip, c); b.type = "button";
+    b.onclick = function () { input.value = c; render(); input.focus(); };
+    $("chips").append(b);
+  });
+
+  function copy(text, btn) {
+    var done = function () { var t = btn.textContent; btn.textContent = "✓"; setTimeout(function () { btn.textContent = t; }, 1200); };
+    if (navigator.clipboard) navigator.clipboard.writeText(text).then(done, done); else done();
+  }
+
+  function render() {
+    var cmd = input.value.trim();
+    out.textContent = "";
+    if (!cmd) { out.append(el("div", C.empty, "Type or pick a command above. Everything is explained on this page, nothing is sent anywhere.")); return; }
+    var x = X.explain(cmd, lang);
+
+    // the command itself, each known word hoverable
+    var line = el("div", C.cmd), rows = [], pos = 0;
+    x.parts.forEach(function (p, i) {
+      if (p.start > pos) line.append(cmd.slice(pos, p.start));
+      var w = el("span", C.w + (p.risky ? C.risky : ""), cmd.slice(p.start, p.end));
+      w.onmouseenter = function () { w.classList.add("on"); rows[i] && rows[i].classList.add("on"); };
+      w.onmouseleave = function () { w.classList.remove("on"); rows[i] && rows[i].classList.remove("on"); };
+      line.append(w); pos = p.end;
+    });
+    if (pos < cmd.length) line.append(cmd.slice(pos));
+    out.append(el("div", C.lbl, x.title), line);
+    x.summary.forEach(function (s) { out.append(el("p", C.sum, s)); });
+
+    out.append(el("div", C.lbl, x.steps));
+    var parts = el("div", C.parts);
+    x.parts.forEach(function (p, i) {
+      var r = el("div", C.part);
+      var m = el("div", C.m, p.meaning || "");
+      if (p.harm) { var h = el("span", C.h); h.append(el("b", C.hb, x.harmLabel + " "), p.harm); m.append(h); }
+      r.append(el("code", C.code + (p.risky ? C.risky : ""), p.text), m);
+      rows[i] = r; parts.append(r);
+    });
+    out.append(parts);
+
+    if (x.safer.length) {
+      out.append(el("div", C.lbl, x.saferTitle));
+      var s = el("div", C.safer);
+      x.safer.forEach(function (t) {
+        var row = el("div", C.safe), b = el("button", C.copy, "copy");
+        b.type = "button"; b.onclick = function () { copy(t, b); };
+        row.append(el("span", null, t), b); s.append(row);
+      });
+      out.append(s);
+    }
+    out.append(el("p", C.note, x.note));
+  }
+
+  input.addEventListener("input", render);
+  var q = new URLSearchParams(location.search).get("cmd");
+  input.value = q != null ? q : EXAMPLES[0];
+  drawLang(); render();
+})();
+</script>
+</body>
+</html>

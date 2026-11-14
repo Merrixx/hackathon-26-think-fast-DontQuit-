@@ -75,3 +75,11 @@ critical. Then try `ls -la` ("Looks safe to run"); the first check moves to *Ear
   installed. **Output → Command Gate** in the dev-host window logs every check.
 - **F5 shows a debugger list (Firefox, Node, Python…):** VS Code has a different folder open.
   Open the repo root itself, or use Run and Debug → *Run Command Gate add-on*.
+
+## Explainer in the browser (no add-on, no backend)
+
+Open [`demo/explainer.html`](demo/explainer.html) in a browser. Type a command or pick an example:
+each word is explained, with what can go wrong and safer ways, in eight languages. It runs the same
+offline dictionary as the add-on (`src/explain.js`), sends nothing anywhere and shows no risk numbers.
+Its styles are Tailwind: `npm run build:css` writes `demo/explainer.css` from `styles/explainer.css`.
+`explainer.html?cmd=git%20push%20--force` opens with a command filled in.
