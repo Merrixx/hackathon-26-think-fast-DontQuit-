@@ -202,6 +202,8 @@ function renderPanel(history, endpoint) {
   @keyframes arc { from { stroke-dasharray: 0 200; } }
 
   /* High contrast: no blur, solid theme borders */
+  body.vscode-high-contrast { --deep: color-mix(in srgb, var(--ink) 16%, transparent); --pillbg: transparent; }
+  body.vscode-high-contrast .command, body.vscode-high-contrast .bar { outline: 1px solid var(--vscode-contrastBorder); }
   body.vscode-high-contrast .glass, body.vscode-high-contrast .pill { backdrop-filter: none; background: transparent; box-shadow: none;
            outline: 1px solid var(--vscode-contrastBorder); }
   body.vscode-high-contrast .glass::before, body.vscode-high-contrast .pill::before, body.vscode-high-contrast .ghost { display: none; }
