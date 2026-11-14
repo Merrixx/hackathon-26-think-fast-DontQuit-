@@ -248,3 +248,18 @@ test('local setup refuses malformed existing configuration without overwriting i
     assert.equal(await readFile(file, 'utf8'), '{bad json')
   } finally { await rm(directory, { recursive: true, force: true }) }
 })
+
+test('shows one row per backend model and takes the verdict from the backend decision', () => {
+  const body = {
+  answers: { unsafe: { type: 'noul', noul: 0.61 } },
+  decision: 'ask', reason: '1 of 2 models above their threshold: kev', mean: 0.61,
+  models: { ngram: { p: 0.12, threshold: 0.5, passed: true, failed: false }, kev: { p: 0.91, threshold: 0.33, passed: false, failed: false } },
+}
+  const opinion = parseAnswers(body, 0.99)
+  assert.equal(opinion.verdict.yes, true)
+  const text = noticeBlock(opinion)
+  assert.match(text, /Models\s+ASK · 1 of 2 models above their threshold: kev/)
+  assert.match(text, /ngram\s+🟢 pass\s+12%/)
+  assert.match(text, /kev\s+🔴 FAIL\s+91%/)
+  assert.equal(noticeBlock(parseAnswers({ answers: body.answers }, 0.5)).split('\n').length, 5)
+})

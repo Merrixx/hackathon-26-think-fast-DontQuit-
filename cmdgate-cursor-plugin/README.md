@@ -26,6 +26,27 @@ approval prompt (plain `allow` runs the hook but shows nothing in the CLI).
 It runs no model itself: every answer comes from the app. If the app is down or
 slow, the prompt still opens with an offline line.
 
+## The backend and what each model said
+
+Point the plugin at the hook backend of this repo, `uv run --extra ml python -m cmdhook.start` (default `http://127.0.0.1:8019/v1/systemone`). It answers the four questions from the models set in `cmdhook/.env` and adds its own decision and every model's result, which the plugin shows as extra rows:
+
+```text
+Command Gate
+  Verdict    🔴 UNSAFE
+  Risk       🟠 high       57%
+  Dangerous  🔴 yes        72%
+  Root       ⚪ n/a
+  Models     ASK · 3 of 3 models above their threshold: rules, ngram-plus, kev
+  rules      🔴 FAIL       69%
+  ngram-plus 🔴 FAIL       86%
+  kev        🔴 FAIL       94%
+```
+
+- **Verdict** is the backend's decision when it sends one (`ask` or `deny` reads as UNSAFE), not this plugin's own threshold.
+- **Risk** and **Dangerous** come from the backend models that have risk levels; Dangerous is P(high or critical). With only yes/no models such as Kev they read `n/a`.
+- **Root** reads `n/a`: no model in the backend answers it.
+- **Models** has one row per backend model: its own risk and whether it passed its threshold. A backend that sends no `models` field gets no extra rows.
+
 ## What it checks, and when
 
 - **Every shell command** the Cursor agent is about to run (`beforeShellExecution`).
@@ -41,7 +62,7 @@ slow, the prompt still opens with an offline line.
 - Node.js 18+ on `PATH` (the hook script is plain Node, no install step).
 - The Command Gate app (or any engine) serving the decision API locally:
   `POST /v1/systemone`, see [../docs/decision-api.md](../docs/decision-api.md).
-  Default endpoint: `http://127.0.0.1:8009/v1/systemone`.
+  Default endpoint: `http://127.0.0.1:8019/v1/systemone`.
   Without the real backend, the fake one from the repo root works for a demo:
   `node vscode-extension/demo/mock-app.js` (made-up answers).
 
@@ -238,7 +259,7 @@ Plugins → Configure when installed as a Cursor plugin):
 
 | Setting | Default | Purpose |
 |---|---|---|
-| `CMDGATE_ENDPOINT` | `http://127.0.0.1:8009/v1/systemone` | Where the app listens |
+| `CMDGATE_ENDPOINT` | `http://127.0.0.1:8019/v1/systemone` | Where the app listens |
 | `CMDGATE_MODEL` | `local` | Sent as `model`, to pick one of the app's models |
 | `CMDGATE_TIMEOUT_MS` | `3000` | How long to wait before saying there is no answer |
 | `CMDGATE_THRESHOLD` | `0.5` | Probability at which a yes/no answer reads as yes |

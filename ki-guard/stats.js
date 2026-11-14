@@ -1,11 +1,8 @@
-// Reads ~/.ki-guard/log.jsonl + allow.json for the dashboard. Local files only.
+// Reads the decision log the hook backend writes (~/.ki-guard/log.jsonl) for the dashboard. Local files only.
 'use strict';
 const fs = require('fs'), path = require('path'), os = require('os');
 const DIR = path.join(os.homedir(), '.ki-guard');
-const ALLOW = path.join(DIR, 'allow.json');
 const old = e => e.bucket || (e.level === 'block' ? 'blocked' : e.level === 'allow' ? 'safe' : 'likely');
-function readAllow() { try { return JSON.parse(fs.readFileSync(ALLOW, 'utf8')).patterns || []; } catch { return []; } }
-function writeAllow(patterns) { fs.mkdirSync(DIR, { recursive: true }); fs.writeFileSync(ALLOW, JSON.stringify({ patterns }, null, 2)); }
 // Scores written by the Python eval harness (`python -m cmdgate.evaluate`) into the repo's results/ folder.
 const RESULTS = process.env.KI_GUARD_RESULTS || path.join(__dirname, '..', 'results');
 function harness() {
@@ -35,6 +32,6 @@ function stats() {
     const d = (e.t || '').slice(0, 10); (days[d] ||= { blocked: 0, likely: 0, unsure: 0, safe: 0, yours: 0 })[e.bucket]++;
     for (const h of e.hits) rules[h] = (rules[h] || 0) + 1;
   }
-  return { harness: harness(), total: ev.length, buckets, agents, days, rules, recent: ev.slice(-60).reverse(), allow: readAllow() };
+  return { harness: harness(), total: ev.length, buckets, agents, days, rules, recent: ev.slice(-60).reverse() };
 }
-module.exports = { stats, harness, readAllow, writeAllow };
+module.exports = { stats, harness };

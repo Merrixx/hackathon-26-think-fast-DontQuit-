@@ -55,13 +55,38 @@ function readLevel(answer) {
 }
 
 // Missing or malformed answers become null and read as "n/a", never guessed.
+// Each model's own risk and whether it passed its threshold, when the backend sends them.
+function readModels(body) {
+  const models = body?.models
+  if (!models || typeof models !== 'object') return []
+  return Object.entries(models).map(([name, m]) => {
+    const p = clamp01(m?.p)
+    const failed = m?.failed === true || p === null
+    return { name, p, threshold: clamp01(m?.threshold), passed: !failed && m?.passed === true, failed }
+  })
+}
+
+function readDecision(body) {
+  return typeof body?.decision === 'string'
+    ? { decision: body.decision, reason: typeof body.reason === 'string' ? body.reason : '' }
+    : null
+}
+
+// When the backend sends its own decision, the verdict is that decision, not this plugin's threshold.
 export function parseAnswers(body, threshold) {
   const answers = (body?.answers ?? {})
+  const decision = readDecision(body)
+  let verdict = readYesNo(answers['unsafe'], threshold)
+  if (decision) {
+    verdict = { p: clamp01(body.mean) ?? verdict?.p ?? 0, yes: decision.decision === 'ask' || decision.decision === 'deny' }
+  }
   return {
     dangerous: readYesNo(answers['dangerous'], threshold),
     root: readYesNo(answers['requires_root'], threshold),
     risk: readLevel(answers['risk_level']),
-    verdict: readYesNo(answers['unsafe'], threshold),
+    verdict,
+    models: readModels(body),
+    decision,
   }
 }
 
@@ -138,7 +163,19 @@ export function noticeLine(o, { color = true } = {}) {
     row('Risk', r.value, r.percent, r.style, colored),
     row('Dangerous', d.value, d.percent, d.style, colored),
     row('Root', root.value, root.percent, root.style, colored),
+    ...modelRows(o, colored),
   ].join('\n')
+}
+
+// One row per model of the backend: its own risk and whether it passed its threshold.
+function modelRows(o, colored) {
+  const models = o.models ?? []
+  if (!models.length) return []
+  const text = o.decision ? `${o.decision.decision.toUpperCase()}${o.decision.reason ? ` · ${o.decision.reason}` : ''}` : ''
+  const head = colored ? `  ${paint(true, ANSI.dim, 'Models'.padEnd(11))}${text}`.trimEnd() : `  ${'Models'.padEnd(11)}${text}`.trimEnd()
+  return [head, ...models.map(m => m.failed || m.p === null
+    ? row(m.name.slice(0, 10), 'no answer', '', ANSI.gray, colored)
+    : row(m.name.slice(0, 10), m.passed ? 'pass' : 'FAIL', pct(m.p), m.passed ? ANSI.green : ANSI.red, colored))]
 }
 
 export function offlineLine(endpoint, reason, { color = true } = {}) {

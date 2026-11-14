@@ -87,7 +87,7 @@ test('an app that is down says so and leaves the decision alone', async ($, on) 
   expect(seen.logs.map(log => log.text)).toEqual([
     'Command Gate',
     '  ⚠ no second opinion',
-    '  http://127.0.0.1:8009/v1/systemone',
+    '  http://127.0.0.1:8019/v1/systemone',
     '  HTTP 500',
   ])
 })
@@ -179,4 +179,19 @@ test('the answer is forwarded to IDE add-ons that registered a window', async ($
   const event = JSON.parse(ide.init.body)
   expect(event.command).toBe('rm -rf ~/')
   expect(event.result).toEqual(ANSWER)
+})
+
+test('shows one row per backend model and takes the verdict from the backend decision', () => {
+  const body = {
+  answers: { unsafe: { type: 'noul', noul: 0.61 } },
+  decision: 'ask', reason: '1 of 2 models above their threshold: kev', mean: 0.61,
+  models: { ngram: { p: 0.12, threshold: 0.5, passed: true, failed: false }, kev: { p: 0.91, threshold: 0.33, passed: false, failed: false } },
+}
+  const opinion = parseAnswers(body, 0.99)
+  expect(opinion.verdict?.yes).toBe(true)
+  const text = transcriptBlock(opinion)
+  expect(text).toContain('Models     ASK · 1 of 2 models above their threshold: kev')
+  expect(text).toMatch(/ngram\s+🟢 pass\s+12%/)
+  expect(text).toMatch(/kev\s+🔴 FAIL\s+91%/)
+  expect(transcriptBlock(parseAnswers({ answers: body.answers }, 0.5)).split('\n').length).toBe(5)
 })

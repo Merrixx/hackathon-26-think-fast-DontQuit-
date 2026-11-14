@@ -37,6 +37,27 @@ The plugin **only advises**. It never approves, denies or changes a permission
 decision, and it runs no model itself: every answer comes from the app. If the
 app is down or slow, the line says so and the prompt opens as usual.
 
+## The backend and what each model said
+
+Point the plugin at the hook backend of this repo, `uv run --extra ml python -m cmdhook.start` (default `http://127.0.0.1:8019/v1/systemone`). It answers the four questions from the models set in `cmdhook/.env` and adds its own decision and every model's result, which the plugin shows as extra rows:
+
+```text
+Command Gate
+  Verdict    🔴 UNSAFE
+  Risk       🟠 high       57%
+  Dangerous  🔴 yes        72%
+  Root       ⚪ n/a
+  Models     ASK · 3 of 3 models above their threshold: rules, ngram-plus, kev
+  rules      🔴 FAIL       69%
+  ngram-plus 🔴 FAIL       86%
+  kev        🔴 FAIL       94%
+```
+
+- **Verdict** is the backend's decision when it sends one (`ask` or `deny` reads as UNSAFE), not this plugin's own threshold.
+- **Risk** and **Dangerous** come from the backend models that have risk levels; Dangerous is P(high or critical). With only yes/no models such as Kev they read `n/a`.
+- **Root** reads `n/a`: no model in the backend answers it.
+- **Models** has one row per backend model: its own risk and whether it passed its threshold. A backend that sends no `models` field gets no extra rows.
+
 ## What it checks, and when
 
 - **Only commands you are about to be asked about.** Commands that Claude Code
@@ -51,7 +72,7 @@ app is down or slow, the line says so and the prompt opens as usual.
   Claude Code 2.1.325. The plugin API is early access and can change between releases.
 - The Command Gate app (or any engine) serving the decision API locally:
   `POST /v1/systemone`, see [../docs/decision-api.md](../docs/decision-api.md).
-  Default endpoint: `http://127.0.0.1:8009/v1/systemone`.
+  Default endpoint: `http://127.0.0.1:8019/v1/systemone`.
   Without the real backend, the fake one from the repo root works for a demo:
   `node vscode-extension/demo/mock-app.js` (made-up answers).
 
@@ -271,7 +292,7 @@ Set them in `/config` (each is a row there) or in settings under
 
 | Setting | Default | Purpose |
 |---|---|---|
-| `endpoint` | `http://127.0.0.1:8009/v1/systemone` | Where the app listens |
+| `endpoint` | `http://127.0.0.1:8019/v1/systemone` | Where the app listens |
 | `model` | `local` | Sent as `model`, to pick one of the app's models |
 | `timeoutMs` | `3000` | How long to wait before saying there is no answer |
 | `threshold` | `0.5` | Probability at which a yes/no answer reads as yes |

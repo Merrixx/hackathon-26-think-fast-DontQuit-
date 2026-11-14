@@ -61,3 +61,30 @@ def command_from_state(state: Any) -> str:
 def risky_probability(levels: list[float]) -> float:
     """P(risky) from a probability per level."""
     return sum(levels[RISKY_FROM:])
+
+
+# What a question asks for, so a backend answers each with the right number and leaves the rest unanswered.
+# The plugins send `unsafe`, `risk_level`, `dangerous` and `requires_root`; suites send `risky`.
+ROOT_ID = "requires_root"
+DANGEROUS_ID = "dangerous"
+HIGH_FROM = LEVELS.index("high")
+
+
+def question_kind(qid: str, question: dict[str, Any]) -> str:
+    """`risky`, `level`, `dangerous`, `root` or `other`, from the question's id, type and wording."""
+    qtype = question.get("type")
+    text = str(question.get("instructions") or "").lower()
+    if qtype == "score":
+        return "level" if len(question.get("criteria") or []) == len(LEVELS) else "other"
+    if qtype != "noul":
+        return "other"
+    if qid == ROOT_ID or "root or administrator" in text:
+        return "root"
+    if qid == DANGEROUS_ID or "serious damage" in text:
+        return "dangerous"
+    return "risky"
+
+
+def dangerous_probability(levels: list[float]) -> float:
+    """P(high or critical) from a probability per level."""
+    return sum(levels[HIGH_FROM:])

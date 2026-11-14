@@ -25,6 +25,27 @@ a command, injects model context, or exits with Codex's blocking code. Backend
 failures produce an offline warning; malformed/non-shell hook input is ignored.
 It runs no model itself: evaluations come from your configured backend.
 
+## The backend and what each model said
+
+Point the plugin at the hook backend of this repo, `uv run --extra ml python -m cmdhook.start` (default `http://127.0.0.1:8019/v1/systemone`). It answers the four questions from the models set in `cmdhook/.env` and adds its own decision and every model's result, which the plugin shows as extra rows:
+
+```text
+Command Gate
+  Verdict    🔴 UNSAFE
+  Risk       🟠 high       57%
+  Dangerous  🔴 yes        72%
+  Root       ⚪ n/a
+  Models     ASK · 3 of 3 models above their threshold: rules, ngram-plus, kev
+  rules      🔴 FAIL       69%
+  ngram-plus 🔴 FAIL       86%
+  kev        🔴 FAIL       94%
+```
+
+- **Verdict** is the backend's decision when it sends one (`ask` or `deny` reads as UNSAFE), not this plugin's own threshold.
+- **Risk** and **Dangerous** come from the backend models that have risk levels; Dangerous is P(high or critical). With only yes/no models such as Kev they read `n/a`.
+- **Root** reads `n/a`: no model in the backend answers it.
+- **Models** has one row per backend model: its own risk and whether it passed its threshold. A backend that sends no `models` field gets no extra rows.
+
 ## What it checks, and when
 
 - Every matching shell command **before execution**, not only approval prompts.
@@ -245,7 +266,7 @@ port 8010 before starting another demo server.
 
 | Environment variable | Default | Purpose |
 |---|---|---|
-| `CMDGATE_ENDPOINT` | `http://127.0.0.1:8009/v1/systemone` | Full backend endpoint |
+| `CMDGATE_ENDPOINT` | `http://127.0.0.1:8019/v1/systemone` | Full backend endpoint |
 | `CMDGATE_MODEL` | `local` | Evaluation backend's model identifier |
 | `CMDGATE_TIMEOUT_MS` | `3000` | Backend timeout in milliseconds |
 | `CMDGATE_THRESHOLD` | `0.5` | Yes/no probability threshold, inclusive; zero is valid |

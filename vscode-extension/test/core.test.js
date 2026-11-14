@@ -39,7 +39,7 @@ test("answers become the four fields", () => {
 
 test("missing or malformed answers are n/a, not guessed", () => {
   const r = core.parseAnswers({ answers: { dangerous: { noul: "x" }, risk_level: { probabilities: {} } } });
-  assert.deepStrictEqual(r, { dangerous: null, root: null, risk: null, verdict: null });
+  assert.deepStrictEqual(r, { dangerous: null, root: null, risk: null, verdict: null, models: [], decision: null });
   assert.strictEqual(core.verdictText(r), "N/A");
   assert.strictEqual(core.severity(r), "info");
 });
@@ -81,7 +81,7 @@ test("panel escapes the command and shows all four fields", () => {
   const entry = { command: "echo '<script>x</script>'", source: "Claude Code", description: "Print a tag",
     at: new Date(), ms: 3, result: core.parseAnswers(ANSWER), severity: "error" };
   const older = { ...entry, command: "ls -la", at: new Date(0) };
-  const html = renderPanel([entry, older], "http://127.0.0.1:8009/v1/systemone");
+  const html = renderPanel([entry, older], "http://127.0.0.1:8019/v1/systemone");
   assert.ok(!html.includes("<script>x"));
   for (const text of ["Look closely before you approve", "Risk level", "critical", "Dangerous", "Needs root access",
     "Claude Code wants to run", "Print a tag", "Earlier checks"]) assert.ok(html.includes(text), text);
@@ -89,7 +89,7 @@ test("panel escapes the command and shows all four fields", () => {
 
 test("panel explains an app that did not answer, and an empty history", () => {
   const html = renderPanel([{ command: "ls", source: "manual", at: new Date(), error: "connect ECONNREFUSED",
-    severity: "offline", endpoint: "http://127.0.0.1:8009/v1/systemone" }], "x");
+    severity: "offline", endpoint: "http://127.0.0.1:8019/v1/systemone" }], "x");
   assert.ok(html.includes("No second opinion") && html.includes("ECONNREFUSED"));
   assert.ok(renderPanel([], "x").includes("Waiting for a permission prompt"));
 });
@@ -221,4 +221,17 @@ test("explain: positions, what can go wrong, safer ways, runtime targets", () =>
     const y = explain("terraform destroy", code);
     assert.ok(y.parts[1].harm && y.safer[0] && y.hint && y.harmLabel && y.saferTitle);
   }
+});
+
+test("the card shows the backend's decision and one pill per backend model", () => {
+  const body = { ...ANSWER, decision: "ask", reason: "1 of 2 models above their threshold: kev", mean: 0.5,
+    models: { ngram: { p: 0.12, threshold: 0.5, passed: true, failed: false }, kev: { p: 0.91, threshold: 0.33, passed: false, failed: false } } };
+  const result = core.parseAnswers(body, { threshold: 0.99 });
+  assert.strictEqual(result.verdict.yes, true); // the backend's decision, not this add-on's threshold
+  assert.deepStrictEqual(result.models.map((m) => [m.name, m.passed]), [["ngram", true], ["kev", false]]);
+  const html = renderPanel([{ command: "git push --force", source: "manual", at: new Date(), ms: 3, result, severity: "error" }], "http://127.0.0.1:8019/v1/systemone");
+  assert.match(html, /Models: ASK · 1 of 2 models above their threshold: kev/);
+  assert.match(html, /ngram: <b[^>]*>pass<\/b> <span[^>]*>\(12%\)/);
+  assert.match(html, /kev: <b[^>]*>fail<\/b> <span[^>]*>\(91%\)/);
+  assert.deepStrictEqual(core.parseAnswers(ANSWER).models, []); // a backend without the field adds nothing
 });

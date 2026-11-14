@@ -53,6 +53,21 @@ Merge the entry that `cmdhook.setup` prints into `.claude/settings.json` (one pr
 
 The hook needs Node and nothing else.
 
+## Who calls the backend
+
+Every frontend in this repo calls this one backend on port 8019; none of them holds a model or decides anything.
+
+| Frontend | Endpoint | What it gets |
+|---|---|---|
+| `cmdhook/hook.js` (the Claude Code hook) | `POST /v1/hook` | The decision, the reason and every model's risk, threshold and pass or fail |
+| The Claude Code, Cursor and Codex plugins, the VS Code add-on | `POST /v1/systemone` | Answers to their questions (approval, risk level, dangerous), plus the same decision and per-model results |
+| The KI-Guard dashboard | `POST /v1/check`, `GET /v1/models` | The same decision and thresholds in the fields the dashboard draws; `"model": "<name>"` asks for one model's own decision |
+
+- The approval question is answered with the mean risk over the models; the decision itself follows `CMDHOOK_COMBINE`.
+- Risk level and "dangerous" (P(high or critical)) come from the models that have risk levels (`rules`, `ngram`, `ngram-plus`, the encoders). Kev answers yes or no only.
+- "Needs root" gets no answer: no model here knows, so the plugins show `n/a`.
+- Every hook decision is appended to `CMDHOOK_LOG` (default `~/.ki-guard/log.jsonl`), which the dashboard counts.
+
 ## Settings
 
 Settings are `CMDHOOK_*` variables in `cmdhook/.env`. A variable in the environment wins over the file, so one start can override it:

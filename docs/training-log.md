@@ -31,6 +31,8 @@ Every experiment on the command gate's yes/no `risky` decision, in the order it 
 - **0.99 was not reached.** Every model family stalls near 0.94 on unseen families and 0.82–0.85 on the hard set. The errors are whole concepts absent from training, which no training setting fixed.
 - Averaging Kev with the four Qwen classifiers adds half a point of validation accuracy (0.946) at about 4 GB more weights; not worth it for a hook.
 - Neither the Adaption export nor a balanced sample of it improved on this model (section 5).
+- A Kev-9B teacher reaches 0.947 on the hard set's agreed cases and flags 3.8% of real commands, but is too large to ship, and distilling it into the 0.8B did not carry that over (section 6).
+- **Kev-4B does fit the laptop and generalises far better:** 0.919 on the hard set and 3.7% of real commands flagged, at about 0.8 s per command and 9.4 GB. Averaged with the 0.8B it keeps validation accuracy at 0.933 with 0.908 on the hard set (section 7). For a hook where a wrong allow is costly and a second of delay is acceptable, that pair is the better choice; the 0.8B alone is the fast one.
 - 0.940 is a selected number: about ten Kev variants were compared on validation. The test split has not been read.
 
 ## Where we started
@@ -153,9 +155,60 @@ Same recipe as `cmdrisk-08b-cap16-e1` (Kev-0.8B, one pass, learning rate 5e-5). 
 
 A second source of new concepts, about 300 command families written by us, was not produced: the agent writing it was stopped by a model safeguard.
 
+### 6. A larger teacher and distillation
+
+Code: `cmdgate/distill.py`. Log lines `kev-cmdrisk-9b-cap16-e1` and `kev-cmdrisk-08b-distill*`.
+
+**Teacher.** Kev-9B, fine-tuned with the cap-16 recipe (one pass, H100). It needs more memory than a 16 GB Mac has, so it cannot ship.
+
+| | Kev-0.8B cap-16 | Kev-9B cap-16 |
+|---|---|---|
+| Validation accuracy | 0.941 | 0.942 |
+| AUROC | 0.964 | 0.975 |
+| Severe recall at 1% false alarms | 0.969 | 0.985 |
+| Calibration error | 0.029 | 0.016 |
+| Hard set, agreed cases | 0.824 (local server 0.826) | **0.947** |
+| Hard set, all 400 | 0.800 | 0.913 |
+| swe-chat flagged | 0.079 | **0.038** |
+
+A model more than ten times larger scores the same on validation, so that split is capped by its data and labels, not by model size. On the hard set and on real commands, where knowing what a command does matters, the larger model is far better.
+
+**Distillation.** The teacher scored 12,000 real, unlabeled InfraSet commands (none of them read by any test). It was confident (P at or below 0.1, or at or above 0.9) on 8,732: 7,223 not risky, 1,509 risky. Two Kev-0.8B students were trained with the cap-16 recipe on the cap-16 rows plus those commands, with the teacher's yes/no answer as the label (contract schema, checked with `cmdgate.kev_check`).
+
+| Student train file | Rows | Validation accuracy | Automated at 5% error | Severe recall | Hard set, agreed | swe-chat flagged | agentapprove AUROC |
+|---|---|---|---|---|---|---|---|
+| Baseline: cap-16 only (two seeds) | 6,747 | 0.941 / 0.938 | 0.975 / 0.965 | 0.969 / 0.962 | 0.824 / 0.846 | 0.079 | 0.770 |
+| + all 8,732 teacher-labelled commands | 15,479 | 0.927 | 0.927 | 0.926 | 0.852 | 0.181 | 0.804 |
+| + 1,509 risky and 3,018 not risky | 11,274 | 0.916 | 0.895 | 0.923 | 0.849 | 0.116 | 0.823 |
+
+- **The teacher's advantage did not transfer.** Both students are at the baseline's seed-to-seed level on the hard set, lower on validation, and flag more real commands, not fewer.
+- **Why, as far as the runs show:** the pool is sysadmin work on disposable machines (restarts, edits under /etc, package installs), which is not what a coding agent runs, and the teacher's edge is knowledge held in its 9B base, which 9,000 yes/no labels on a different kind of command do not carry over. A pool of real coding-agent commands was not available: the only one we have is a test set.
+- **Verdict: not adopted.** `cmdrisk-08b-cap16-e1` stays the shipped model. Each student is one seed.
+
+### 7. Kev-4B: the largest Kev that runs on the laptop
+
+Log lines `kev-cmdrisk-4b-cap16-e1`, `kev-4b-cap16-local` and `blend-kev08-kev4*`. Kev-4B, fine-tuned with the cap-16 recipe (one pass, H100, contract schema, same training file as the 0.8B and the 9B).
+
+| | Kev-0.8B cap-16 | Kev-4B cap-16 | Mean of the two | Kev-9B cap-16 |
+|---|---|---|---|---|
+| Validation accuracy | 0.941 | 0.900 | 0.933 | 0.942 |
+| Automated at 5% error | 0.975 | 0.856 | 0.968 | 0.987 |
+| AUROC | 0.964 | 0.967 | 0.976 | 0.975 |
+| Severe recall at 1% false alarms | 0.969 | 0.913 | 0.991 | 0.985 |
+| Hard set, agreed cases | 0.824 | **0.919** | 0.908 | 0.947 |
+| Hard set, all 400 | 0.800 | 0.898 | 0.885 | 0.913 |
+| swe-chat flagged | 0.079 | **0.037** | 0.046 | 0.038 |
+| Runs on the Apple M2 with 16 GB | yes, 131 ms per command | yes, about 810 ms per command | yes, both loaded | no |
+
+- **It generalises much better than the 0.8B:** nine points more on the hard set and half the false alarms on real commands, close to the 9B.
+- **It scores lower on validation** (0.900 against 0.941; one seed). It ranks as well as the 0.8B there (AUROC 0.967), so the loss is at the 0.5 cut-off on a few large families.
+- **It runs on the laptop, verified.** The fine-tuned checkpoint (160 MB adapter on the 9.3 GB base) was served on the Apple M2 with the network off: 78 s to load with the base cached, 9.4 GB of memory, 400 hard-set commands in 325 s. Its answers match the cloud scoring: mean difference in P(risky) 0.003, no decision of 400 differs. Loading folds the adapter into the base and swaps heavily on 16 GB while it does.
+- **The plain mean of the 0.8B and the 4B is the best-rounded local option:** within a point of the 0.8B on validation, 0.908 on the hard set, 4.6% of real commands flagged, and the highest severe recall of any local model (0.991). It costs both models' memory (about 11 GB) and time (about 0.9 s per command). The numbers are from saved predictions, nothing fitted.
+- The Kev-4B weights are in `runs/cmdrisk-4b-cap16-e1/checkpoint/` on the training machine and on the Modal volume; they are not in the published model repo yet.
+
 ## Cloud spend
 
-Hard ceiling for the day: $42. From `modal billing report --for today` after the last run: $24.62 in total, of which encoder runs $6.88 and Kev fine-tuning and scoring the rest. Lost to cancelled runs: about $3.75 (Kev-4B) and $0.40 (first Adaption launch).
+Hard ceiling for the day: $42. From `modal billing report --for today` after the last run: $36.76 in total (encoder runs $6.88, everything else Kev fine-tuning and scoring). Lost to cancelled runs: about $3.75 (Kev-4B) and $0.40 (first Adaption launch).
 
 A run started with `modal run --detach` is still cancelled if the launching machine loses its connection while the call is open. The Adaption runs were therefore started from a copy of Kev's Modal app in which `train` calls `.spawn()` instead of `.remote()`, so the job no longer depends on the client.
 

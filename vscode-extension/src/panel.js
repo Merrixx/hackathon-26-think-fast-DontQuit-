@@ -62,6 +62,19 @@ function fact(label, v) {
   return `<span class="${PILL} text-[12px] text-quiet" title="${v ? core.pct(v.p) : "no answer"}">${esc(label)}: <b class="font-semibold ${v && v.yes ? "text-tone" : "text-ink"}">${value}</b>${v ? ` <span class="tabular-nums">(${core.pct(v.p)})</span>` : ""}</span>`;
 }
 
+// One pill per backend model: its own risk, and whether it passed its threshold.
+function model(m) {
+  const state = m.failed ? "no answer" : m.passed ? "pass" : "fail";
+  const title = m.failed ? "no answer" : `risk ${core.pct(m.p)}${m.threshold === null ? "" : `, threshold ${core.pct(m.threshold)}`}`;
+  return `<span class="${PILL} text-[12px] text-quiet" title="${esc(title)}">${esc(m.name)}: <b class="font-semibold ${m.failed || m.passed ? "text-ink" : "text-tone"}">${state}</b>${m.failed ? "" : ` <span class="tabular-nums">(${core.pct(m.p)})</span>`}</span>`;
+}
+
+function models(r) {
+  if (!r.models || !r.models.length) return "";
+  const head = r.decision ? `${r.decision.decision.toUpperCase()}${r.decision.reason ? ` · ${r.decision.reason}` : ""}` : "";
+  return `<div class="mx-1 mt-3 text-[12px] text-quiet">Models${head ? `: ${esc(head)}` : ""}</div><div class="mt-1.5 flex flex-wrap gap-1.5">${r.models.map(model).join("")}</div>`;
+}
+
 function who(entry) {
   return entry.source === "Claude Code" ? "Claude Code wants to run" : entry.source === "manual" ? "You asked about" : "Checked from your selection";
 }
@@ -86,7 +99,7 @@ function slip(entry, h) {
       <pre class="mt-1 font-mono text-[13px]/[1.45] whitespace-pre-wrap [word-break:break-word]"><code class="font-mono">${esc(entry.command)}</code></pre>
       ${about ? `<p class="mt-1.5 text-[12px] text-quiet">${esc(about)}</p>` : ""}
     </div>
-    ${r ? `${scale(r.risk)}<div class="mt-3 flex flex-wrap gap-1.5">${fact("Dangerous", r.dangerous)}${fact("Needs root access", r.root)}</div>` : ""}
+    ${r ? `${scale(r.risk)}<div class="mt-3 flex flex-wrap gap-1.5">${fact("Dangerous", r.dangerous)}${fact("Needs root access", r.root)}</div>${models(r)}` : ""}
   </article>`;
 }
 

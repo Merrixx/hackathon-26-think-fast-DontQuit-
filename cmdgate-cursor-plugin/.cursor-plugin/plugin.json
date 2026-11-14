@@ -12,7 +12,7 @@
         "type": "string",
         "title": "Backend endpoint",
         "description": "Decision API endpoint of the locally running Command Gate app.",
-        "default": "http://127.0.0.1:8009/v1/systemone"
+        "default": "http://127.0.0.1:8019/v1/systemone"
       },
       "CMDGATE_MODEL": {
         "type": "string",

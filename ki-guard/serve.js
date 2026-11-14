@@ -1,10 +1,9 @@
-// KI-Guard frontend server: the dashboard, your decision log and your allowlist. It holds no model.
-// Every verdict and every score comes from the Python backend (`python -m cmdgate.engine`, KI_GUARD_BACKEND)
-// and from the eval harness results it was started with. The decision API (/v1/systemone) lives on the backend.
+// KI-Guard frontend server: the dashboard. It holds no model and makes no decision.
+// Every verdict, score and threshold comes from the hook backend (`python -m cmdhook.start`, KI_GUARD_BACKEND);
+// the counts come from the decision log that backend writes, the harness card from the repo's results/ folder.
 'use strict';
 const http = require('http'), fs = require('fs'), path = require('path'), os = require('os');
 const G = require('./guard'), S = require('./stats');
-const { traits } = require('./traits');
 
 const PORT = +process.env.PORT || 8049;
 const SETTINGS = path.join(os.homedir(), '.ki-guard', 'settings.json');
@@ -16,7 +15,6 @@ http.createServer((req, res) => {
   if (req.method === 'GET' && req.url === '/health') return send(200, { ok: true });
   if (req.method === 'GET' && (req.url === '/' || req.url === '/dashboard')) { res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); return res.end(fs.readFileSync(path.join(__dirname, 'dashboard.html'))); }
   if (req.method === 'GET' && req.url === '/api/stats') return models().then(m => send(200, { ...S.stats(), models: m, mode: G.mode() || 'auto', backend: G.BACKEND }));
-  if (req.method === 'POST' && req.url === '/api/allow') return readJson(q => { if (!Array.isArray(q.patterns)) throw 0; S.writeAllow(q.patterns.map(String).slice(0, 200)); send(200, { ok: true }); });
   // Which model decides: "auto" = the backend's default, or one of the models the backend serves.
   if (req.method === 'POST' && req.url === '/api/settings') return readJson(async q => {
     const m = await models();
@@ -26,9 +24,8 @@ http.createServer((req, res) => {
   // Tester: type a command, see the backend's verdict and every model's probability. Not logged.
   if (req.method === 'POST' && req.url === '/api/check') return readJson(async q => {
     const text = String(q.command || '').slice(0, 5000), t0 = process.hrtime.bigint();
-    const c = await G.checkCommand(text, true); const ms = Number(process.hrtime.bigint() - t0) / 1e6;
-    const mine = G.allowed(text);
-    send(200, { ...c, level: mine ? 'allow' : c.verdict, allowlisted: mine, traits: traits(text), ms });
+    const c = await G.checkCommand(text); const ms = Number(process.hrtime.bigint() - t0) / 1e6;
+    send(200, { ...c, level: c.verdict, ms });
   });
   send(404, { error: 'not found' });
 }).listen(PORT, '127.0.0.1', () => console.log(`KI-Guard dashboard on http://127.0.0.1:${PORT}/ (model backend: ${G.BACKEND})`));

@@ -14,7 +14,7 @@ From the repo root:
 node vscode-extension/demo/mock-app.js
 ```
 
-It prints `DEMO mock app (fake data) on http://127.0.0.1:8009/v1/systemone`, then one line
+It prints `DEMO mock app (fake data) on http://127.0.0.1:8019/v1/systemone`, then one line
 per command it is asked about. That line is the quickest way to see that a check happened.
 
 ## 2. Start the add-on
@@ -68,7 +68,7 @@ critical. Then try `ls -la` ("Looks safe to run"); the first check moves to *Ear
 ## If something doesn't show
 
 - **"Gate: app offline" / "No second opinion":** the fake app isn't running, or isn't on
-  port 8009.
+  port 8019.
 - **No line under a Claude prompt:** make sure Claude actually showed a prompt (default mode,
   and the command isn't already allowed) and that it was started with `--plugin-dir cmdgate-claude-plugin`.
   `claude --debug` logs why a plugin hook was skipped.

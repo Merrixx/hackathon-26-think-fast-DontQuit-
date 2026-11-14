@@ -15,7 +15,7 @@ function options() {
   const timeout = Number(env('CMDGATE_TIMEOUT_MS', '3000'))
   const threshold = Number(env('CMDGATE_THRESHOLD', '0.5'))
   return {
-    endpoint: env('CMDGATE_ENDPOINT', 'http://127.0.0.1:8009/v1/systemone'),
+    endpoint: env('CMDGATE_ENDPOINT', 'http://127.0.0.1:8019/v1/systemone'),
     model: env('CMDGATE_MODEL', 'local'),
     timeoutMs: Number.isFinite(timeout) && timeout > 0 ? Math.max(1, Math.floor(timeout)) : 3000,
     threshold: Number.isFinite(threshold) && threshold >= 0 && threshold <= 1 ? threshold : 0.5,

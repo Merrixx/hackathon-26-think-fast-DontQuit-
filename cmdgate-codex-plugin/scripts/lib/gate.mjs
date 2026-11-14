@@ -55,13 +55,38 @@ function readLevel(answer) {
   return { index, level: LEVELS[index], p: probabilities[index] }
 }
 
+// Each model's own risk and whether it passed its threshold, when the backend sends them.
+function readModels(body) {
+  const models = body?.models
+  if (!models || typeof models !== 'object') return []
+  return Object.entries(models).map(([name, m]) => {
+    const p = clamp01(m?.p)
+    const failed = m?.failed === true || p === null
+    return { name, p, threshold: clamp01(m?.threshold), passed: !failed && m?.passed === true, failed }
+  })
+}
+
+function readDecision(body) {
+  return typeof body?.decision === 'string'
+    ? { decision: body.decision, reason: typeof body.reason === 'string' ? body.reason : '' }
+    : null
+}
+
+// When the backend sends its own decision, the verdict is that decision, not this plugin's threshold.
 export function parseAnswers(body, threshold) {
   const answers = body?.answers ?? {}
+  const decision = readDecision(body)
+  let verdict = readYesNo(answers.unsafe, threshold)
+  if (decision) {
+    verdict = { p: clamp01(body.mean) ?? verdict?.p ?? 0, yes: decision.decision === 'ask' || decision.decision === 'deny' }
+  }
   return {
     dangerous: readYesNo(answers.dangerous, threshold),
     root: readYesNo(answers.requires_root, threshold),
     risk: readLevel(answers.risk_level),
-    verdict: readYesNo(answers.unsafe, threshold),
+    verdict,
+    models: readModels(body),
+    decision,
   }
 }
 
@@ -89,7 +114,19 @@ export function noticeBlock(opinion) {
       : row('Risk', '⚪', 'n/a'),
     yesNoRow('Dangerous', opinion.dangerous),
     yesNoRow('Root', opinion.root),
+    ...modelRows(opinion),
   ].join('\n')
+}
+
+// One row per model of the backend: its own risk and whether it passed its threshold.
+function modelRows(opinion) {
+  const models = opinion.models ?? []
+  if (!models.length) return []
+  const d = opinion.decision
+  const head = d ? `  Models     ${d.decision.toUpperCase()}${d.reason ? ` · ${d.reason}` : ''}` : '  Models'
+  return [head, ...models.map(m => m.failed || m.p === null
+    ? row(m.name.slice(0, 10), '⚪', 'no answer')
+    : row(m.name.slice(0, 10), m.passed ? '🟢' : '🔴', m.passed ? 'pass' : 'FAIL', m.p))]
 }
 
 export function offlineBlock(endpoint, reason) {
